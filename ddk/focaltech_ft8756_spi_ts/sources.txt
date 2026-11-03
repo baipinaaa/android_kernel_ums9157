@@ -1,0 +1,16 @@
+drivers/input/touchscreen/focaltech_ft8756/focaltech_common_interface.c
+drivers/input/touchscreen/focaltech_ft8756/focaltech_core.c
+drivers/input/touchscreen/focaltech_ft8756/focaltech_esdcheck.c
+drivers/input/touchscreen/focaltech_ft8756/focaltech_ex_fun.c
+drivers/input/touchscreen/focaltech_ft8756/focaltech_ex_mode.c
+drivers/input/touchscreen/focaltech_ft8756/focaltech_flash.c
+drivers/input/touchscreen/focaltech_ft8756/focaltech_gesture.c
+drivers/input/touchscreen/focaltech_ft8756/focaltech_point_report_check.c
+drivers/input/touchscreen/focaltech_ft8756/focaltech_spi.c
+drivers/input/touchscreen/focaltech_ft8756/focaltech_test/focaltech_test.c
+drivers/input/touchscreen/focaltech_ft8756/focaltech_test/focaltech_test_ini.c
+drivers/input/touchscreen/focaltech_ft8756/focaltech_test/supported_ic/focaltech_test_ft8720.c
+drivers/input/touchscreen/focaltech_ft8756/focaltech_test/supported_ic/focaltech_test_ft8756.c
+drivers/input/touchscreen/focaltech_ft8756/fts_hwconfig.c
+drivers/input/touchscreen/focaltech_ft8756/fts_odm.c
+drivers/input/touchscreen/focaltech_ft8756/fts_sysfs.c

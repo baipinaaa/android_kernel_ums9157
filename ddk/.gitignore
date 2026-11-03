@@ -1,0 +1,8 @@
+# ddk-sync.sh 在构建前复制的源文件（不提交，避免两份代码漂移）
+ddk/*/*.c
+ddk/*/*.h
+ddk/*/*.S
+ddk/*/*.o
+ddk/*/.*.cmd
+ddk/*/modules.order
+ddk/*/Module.symvers

@@ -1,0 +1,3 @@
+sound/soc/sprd/sprd-asoc-card-utils.c
+sound/soc/sprd/sprd-asoc-card-utils-legacy.c
+sound/soc/sprd/vbc-rxpx-codec-sc27xx.c
