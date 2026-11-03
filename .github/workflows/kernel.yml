@@ -2,7 +2,7 @@ name: kernel-build
 
 on:
   push:
-    branches: [ unisoc-port ]
+    branches: [ master ]
   workflow_dispatch:
 
 jobs:
