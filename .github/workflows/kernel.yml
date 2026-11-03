@@ -1,0 +1,54 @@
+name: kernel-build
+
+on:
+  push:
+    branches: [ unisoc-port ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 350
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: 环境信息
+        run: |
+          nproc; free -g | head -2; df -h / | tail -1
+          gcc --version | head -1
+
+      - name: 安装依赖
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq bc bison flex libssl-dev libelf-dev \
+            gcc-aarch64-linux-gnu binutils-aarch64-linux-gnu
+
+      - name: defconfig
+        run: |
+          make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- sprd_ums9157_defconfig 2>&1 | tail -20
+          grep -E "^(CONFIG_LTO|CONFIG_CFI|CONFIG_CC_IS)" .config || true
+
+      - name: 编译 Image
+        run: |
+          set -o pipefail
+          make -j2 ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- Image 2>&1 | tee build.log
+        continue-on-error: true
+
+      - name: 错误摘要
+        if: always()
+        run: |
+          echo "=== 首 80 条 error ==="
+          grep -nE "error:|Error [0-9]|fatal error" build.log | head -80 || echo "无"
+          echo "=== 最后 30 行 ==="
+          tail -30 build.log
+
+      - name: 产物
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-log
+          path: build.log
+          retention-days: 14
+          if-no-files-found: warn
