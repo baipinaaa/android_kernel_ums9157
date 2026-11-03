@@ -2868,10 +2868,8 @@ int __split_vma(struct mm_struct *mm, struct vm_area_struct *vma,
 		err = vma_adjust(vma, vma->vm_start, addr, vma->vm_pgoff, new);
 
 	/* Success. */
-	if (!err) {
-		split_pad_vma(vma, new, addr, new_below);
+	if (!err)
 		return 0;
-	}
 
 	/* Clean everything up if vma_adjust failed. */
 	if (new->vm_ops && new->vm_ops->close)
