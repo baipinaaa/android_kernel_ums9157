@@ -2053,6 +2053,7 @@ static ssize_t use_dedup_store(struct device *dev,
 
 	return len;
 }
+static DEVICE_ATTR_RW(comp_algorithm);
 static DEVICE_ATTR_RW(use_dedup);
 #ifdef CONFIG_ZRAM_WRITEBACK
 static DEVICE_ATTR_RW(backing_dev);
