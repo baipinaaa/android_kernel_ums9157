@@ -53,6 +53,15 @@ jobs:
             echo "---------- 计数:"
             grep -cE ' error: ' "$f" || true
           done
+          # 通过 annotation 暴露错误行，便于无 token 的 API 读取
+          grep -hoE '[^ :]+\.(c|h|S):[0-9]+:[0-9]+: (error|fatal error):.*' build.log 2>/dev/null \
+            | sort -u | head -25 | while IFS= read -r line; do
+                echo "::error::$line"
+              done
+          grep -E 'undefined reference to' build.log 2>/dev/null \
+            | sed 's/^ *//' | sort -u | head -25 | while IFS= read -r line; do
+                echo "::error::$line"
+              done
 
       - name: 上传产物
         if: always()

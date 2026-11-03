@@ -1017,24 +1017,6 @@ static void sprd_console_write(struct console *co, const char *s,
 		spin_unlock_irqrestore(&port->lock, flags);
 }
 
-#ifdef CONFIG_SPRD_HANG_DEBUG_UART
-/*
- * 无锁的串口输出路径，供 hang debug 在 panic 现场直接打印。
- */
-void sprd_hangd_console_write(const char *s, unsigned int count)
-{
-	struct uart_port *port;
-
-	if (!sprd_uart_driver.cons || sprd_uart_driver.cons->index < 0)
-		return;
-
-	port = &sprd_port[sprd_uart_driver.cons->index]->port;
-	uart_console_write(port, s, count, sprd_console_putchar);
-	wait_for_xmitr(port);
-}
-EXPORT_SYMBOL(sprd_hangd_console_write);
-#endif
-
 static int sprd_console_setup(struct console *co, char *options)
 {
 	struct sprd_uart_port *sprd_uart_port;
@@ -1329,6 +1311,24 @@ static struct platform_driver sprd_platform_driver = {
 		.pm	= &sprd_pm_ops,
 	},
 };
+
+#ifdef CONFIG_SPRD_HANG_DEBUG_UART
+/*
+ * 无锁的串口输出路径，供 hang debug 在 panic 现场直接打印。
+ */
+void sprd_hangd_console_write(const char *s, unsigned int count)
+{
+	struct uart_port *port;
+
+	if (!sprd_uart_driver.cons || sprd_uart_driver.cons->index < 0)
+		return;
+
+	port = &sprd_port[sprd_uart_driver.cons->index]->port;
+	uart_console_write(port, s, count, sprd_console_putchar);
+	wait_for_xmitr(port);
+}
+EXPORT_SYMBOL(sprd_hangd_console_write);
+#endif
 
 module_platform_driver(sprd_platform_driver);
 
