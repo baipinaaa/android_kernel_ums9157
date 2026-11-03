@@ -33,7 +33,11 @@ endif
 # is not supported for out-of-tree builds.
 #
 
+# 仅 out-of-tree 构建时给默认值；in-tree 时完全由 Kconfig 决定，
+# 否则 defconfig 没选 MALI_MIDGARD 也会被强制编进来。
+ifneq ($(KBUILD_EXTMOD),)
 CONFIG_MALI_MIDGARD ?= m
+endif
 ifeq ($(CONFIG_MALI_MIDGARD),m)
     CONFIG_MALI_PLATFORM_NAME ?= "devicetree"
     CONFIG_MALI_GATOR_SUPPORT ?= y
@@ -223,46 +227,46 @@ EXTRA_CFLAGS += -DCONFIG_MALI_PLATFORM_NAME=$(CONFIG_MALI_PLATFORM_NAME)
 # KBUILD_EXTRA_SYMBOLS to prevent warnings about unknown functions
 #
 
-KBUILD_CFLAGS += -Wall -Werror
+ccflags-y += -Wall -Werror
 
 # The following were added to align with W=1 in scripts/Makefile.extrawarn
 # from the Linux source tree (v5.18.14)
-KBUILD_CFLAGS += -Wextra -Wunused -Wno-unused-parameter
-KBUILD_CFLAGS += -Wmissing-declarations
-KBUILD_CFLAGS += -Wmissing-format-attribute
-KBUILD_CFLAGS += -Wmissing-prototypes
-KBUILD_CFLAGS += -Wold-style-definition
+ccflags-y += -Wextra -Wunused -Wno-unused-parameter
+ccflags-y += -Wmissing-declarations
+ccflags-y += -Wmissing-format-attribute
+ccflags-y += -Wmissing-prototypes
+ccflags-y += -Wold-style-definition
 # The -Wmissing-include-dirs cannot be enabled as the path to some of the
 # included directories change depending on whether it is an in-tree or
 # out-of-tree build.
-KBUILD_CFLAGS += $(call cc-option, -Wunused-but-set-variable)
-KBUILD_CFLAGS += $(call cc-option, -Wunused-const-variable)
-KBUILD_CFLAGS += $(call cc-option, -Wpacked-not-aligned)
-KBUILD_CFLAGS += $(call cc-option, -Wstringop-truncation)
+ccflags-y += $(call cc-option, -Wunused-but-set-variable)
+ccflags-y += $(call cc-option, -Wunused-const-variable)
+ccflags-y += $(call cc-option, -Wpacked-not-aligned)
+ccflags-y += $(call cc-option, -Wstringop-truncation)
 # The following turn off the warnings enabled by -Wextra
-KBUILD_CFLAGS += -Wno-sign-compare
-KBUILD_CFLAGS += -Wno-shift-negative-value
+ccflags-y += -Wno-sign-compare
+ccflags-y += -Wno-shift-negative-value
 # This flag is needed to avoid build errors on older kernels
-KBUILD_CFLAGS += $(call cc-option, -Wno-cast-function-type)
+ccflags-y += $(call cc-option, -Wno-cast-function-type)
 
-KBUILD_CPPFLAGS += -DKBUILD_EXTRA_WARN1
+ccflags-y += -DKBUILD_EXTRA_WARN1
 
 # The following were added to align with W=2 in scripts/Makefile.extrawarn
 # from the Linux source tree (v5.18.14)
-KBUILD_CFLAGS += -Wdisabled-optimization
+ccflags-y += -Wdisabled-optimization
 # The -Wshadow flag cannot be enabled unless upstream kernels are
 # patched to fix redefinitions of certain built-in functions and
 # global variables.
-KBUILD_CFLAGS += $(call cc-option, -Wlogical-op)
-KBUILD_CFLAGS += -Wmissing-field-initializers
-KBUILD_CFLAGS += -Wtype-limits
-KBUILD_CFLAGS += $(call cc-option, -Wmaybe-uninitialized)
-KBUILD_CFLAGS += $(call cc-option, -Wunused-macros)
+ccflags-y += $(call cc-option, -Wlogical-op)
+ccflags-y += -Wmissing-field-initializers
+ccflags-y += -Wtype-limits
+ccflags-y += $(call cc-option, -Wmaybe-uninitialized)
+ccflags-y += $(call cc-option, -Wunused-macros)
 
-KBUILD_CPPFLAGS += -DKBUILD_EXTRA_WARN2
+ccflags-y += -DKBUILD_EXTRA_WARN2
 
 # This warning is disabled to avoid build failures in some kernel versions
-KBUILD_CFLAGS += -Wno-ignored-qualifiers
+ccflags-y += -Wno-ignored-qualifiers
 
 all:
 	$(MAKE) -C $(KDIR) M=$(M) $(MAKE_ARGS) EXTRA_CFLAGS="$(EXTRA_CFLAGS)" KBUILD_EXTRA_SYMBOLS="$(EXTRA_SYMBOLS)" modules
