@@ -30,6 +30,9 @@
 #include <linux/sched/task.h>
 #include <linux/seq_file.h>
 #include <linux/slab.h>
+#include <linux/cdev.h>
+#include <linux/device.h>
+#include <linux/fs.h>
 #include <linux/spinlock.h>
 #include <linux/uaccess.h>
 #include <linux/wait.h>
@@ -2169,6 +2172,88 @@ static const struct file_operations sblock_debug_fops = {
 	.llseek = seq_lseek,
 	.release = single_release,
 };
+
+/*
+ * The vendor build exposes the same debug fops through a character device
+ * (/dev/sipc_sblock) instead of debugfs.  Keep the debugfs node and also
+ * register the char device, so both interfaces exist.
+ */
+struct sblock_debug_dev {
+	dev_t dev;
+	struct cdev cdev;
+	struct device *device;
+};
+
+static struct sblock_debug_dev *sblock_dev;
+static struct class *sblock_class;
+
+int sblock_init_debug(void *arg)
+{
+	int ret;
+
+	sblock_dev = kzalloc(sizeof(*sblock_dev), GFP_KERNEL);
+	if (!sblock_dev) {
+		pr_err("sprd-sblock: Failed to alloc memory for sblock dev\n");
+		return -ENOMEM;
+	}
+
+	ret = alloc_chrdev_region(&sblock_dev->dev, 0, 1, "sblock_debug");
+	if (ret)
+		goto err_free;
+
+	cdev_init(&sblock_dev->cdev, &sblock_debug_fops);
+	ret = cdev_add(&sblock_dev->cdev, sblock_dev->dev, 1);
+	if (ret)
+		goto err_region;
+
+	sblock_class = class_create(THIS_MODULE, "sblock");
+	if (IS_ERR(sblock_class)) {
+		ret = PTR_ERR(sblock_class);
+		goto err_cdev;
+	}
+
+	sblock_dev->device = device_create(sblock_class, NULL, sblock_dev->dev,
+					   NULL, "sipc_sblock");
+	if (IS_ERR(sblock_dev->device)) {
+		ret = PTR_ERR(sblock_dev->device);
+		sblock_dev->device = NULL;
+		goto err_class;
+	}
+
+	return 0;
+
+err_class:
+	class_destroy(sblock_class);
+err_cdev:
+	cdev_del(&sblock_dev->cdev);
+err_region:
+	unregister_chrdev_region(sblock_dev->dev, 1);
+err_free:
+	kfree(sblock_dev);
+	sblock_dev = NULL;
+	return ret;
+}
+EXPORT_SYMBOL_GPL(sblock_init_debug);
+
+void sblock_destroy_debug(void)
+{
+	if (!sblock_dev)
+		return;
+
+	if (sblock_dev->device) {
+		device_destroy(sblock_class, sblock_dev->dev);
+		sblock_dev->device = NULL;
+	}
+
+	if (!IS_ERR_OR_NULL(sblock_class))
+		class_destroy(sblock_class);
+
+	unregister_chrdev_region(sblock_dev->dev, 1);
+	cdev_del(&sblock_dev->cdev);
+	kfree(sblock_dev);
+	sblock_dev = NULL;
+}
+EXPORT_SYMBOL_GPL(sblock_destroy_debug);
 
 int sblock_init_debugfs(void *root)
 {

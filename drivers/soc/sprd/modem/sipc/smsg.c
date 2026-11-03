@@ -26,6 +26,9 @@
 #include <linux/sched.h>
 #include <linux/seq_file.h>
 #include <linux/slab.h>
+#include <linux/cdev.h>
+#include <linux/device.h>
+#include <linux/fs.h>
 #include <linux/wait.h>
 #include <linux/module.h>
 #include <linux/of_address.h>
@@ -956,6 +959,87 @@ static const struct file_operations smsg_debug_fops = {
 	.llseek = seq_lseek,
 	.release = single_release,
 };
+
+struct smsg_debug_dev {
+	dev_t dev;
+	struct cdev cdev;
+	struct device *device;
+};
+
+static struct smsg_debug_dev *smsg_dev;
+static struct class *smsg_class;
+
+int smsg_init_debug(void *arg)
+{
+	int ret;
+
+	smsg_dev = kzalloc(sizeof(*smsg_dev), GFP_KERNEL);
+	if (!smsg_dev) {
+		pr_err("unisoc-mailbox Failed to alloc memory for smsg dev\n");
+		return -ENOMEM;
+	}
+
+	ret = alloc_chrdev_region(&smsg_dev->dev, 0, 1, "smsg_debug");
+	if (ret) {
+		pr_err("unisoc-mailbox Failed to alloc chrdev region\n");
+		goto err_free;
+	}
+
+	cdev_init(&smsg_dev->cdev, &smsg_debug_fops);
+	ret = cdev_add(&smsg_dev->cdev, smsg_dev->dev, 1);
+	if (ret) {
+		pr_err("unisoc-mailbox Failed to add smsg cdev\n");
+		goto err_region;
+	}
+
+	smsg_class = class_create(THIS_MODULE, "smsg");
+	if (IS_ERR(smsg_class)) {
+		ret = PTR_ERR(smsg_class);
+		goto err_cdev;
+	}
+
+	smsg_dev->device = device_create(smsg_class, NULL, smsg_dev->dev,
+					 NULL, "sipc_smsg");
+	if (IS_ERR(smsg_dev->device)) {
+		ret = PTR_ERR(smsg_dev->device);
+		smsg_dev->device = NULL;
+		goto err_class;
+	}
+
+	return 0;
+
+err_class:
+	class_destroy(smsg_class);
+err_cdev:
+	cdev_del(&smsg_dev->cdev);
+err_region:
+	unregister_chrdev_region(smsg_dev->dev, 1);
+err_free:
+	kfree(smsg_dev);
+	smsg_dev = NULL;
+	return ret;
+}
+EXPORT_SYMBOL_GPL(smsg_init_debug);
+
+void smsg_destroy_debug(void)
+{
+	if (!smsg_dev)
+		return;
+
+	if (smsg_dev->device) {
+		device_destroy(smsg_class, smsg_dev->dev);
+		smsg_dev->device = NULL;
+	}
+
+	if (!IS_ERR_OR_NULL(smsg_class))
+		class_destroy(smsg_class);
+
+	unregister_chrdev_region(smsg_dev->dev, 1);
+	cdev_del(&smsg_dev->cdev);
+	kfree(smsg_dev);
+	smsg_dev = NULL;
+}
+EXPORT_SYMBOL_GPL(smsg_destroy_debug);
 
 int smsg_init_debugfs(void *root)
 {

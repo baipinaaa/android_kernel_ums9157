@@ -26,6 +26,9 @@
 #include <linux/sched.h>
 #include <linux/seq_file.h>
 #include <linux/slab.h>
+#include <linux/cdev.h>
+#include <linux/device.h>
+#include <linux/fs.h>
 #include <linux/sipc.h>
 
 #include "sipc_priv.h"
@@ -522,6 +525,87 @@ static const struct file_operations smem_debug_fops = {
 	.llseek = seq_lseek,
 	.release = single_release,
 };
+
+struct smem_debug_dev {
+	dev_t dev;
+	struct cdev cdev;
+	struct device *device;
+};
+
+static struct smem_debug_dev *smem_dev;
+static struct class *smem_class;
+
+int smem_init_debug(void *arg)
+{
+	int ret;
+
+	smem_dev = kzalloc(sizeof(*smem_dev), GFP_KERNEL);
+	if (!smem_dev) {
+		pr_err("sprd-smem: Failed to alloc memory for smem dev\n");
+		return -ENOMEM;
+	}
+
+	ret = alloc_chrdev_region(&smem_dev->dev, 0, 1, "smem_debug");
+	if (ret) {
+		pr_err("sprd-smem: Failed to alloc chrdev region\n");
+		goto err_free;
+	}
+
+	cdev_init(&smem_dev->cdev, &smem_debug_fops);
+	ret = cdev_add(&smem_dev->cdev, smem_dev->dev, 1);
+	if (ret) {
+		pr_err("sprd-smem: Failed to add smem cdev\n");
+		goto err_region;
+	}
+
+	smem_class = class_create(THIS_MODULE, "smem");
+	if (IS_ERR(smem_class)) {
+		ret = PTR_ERR(smem_class);
+		goto err_cdev;
+	}
+
+	smem_dev->device = device_create(smem_class, NULL, smem_dev->dev,
+					 NULL, "sipc_smem");
+	if (IS_ERR(smem_dev->device)) {
+		ret = PTR_ERR(smem_dev->device);
+		smem_dev->device = NULL;
+		goto err_class;
+	}
+
+	return 0;
+
+err_class:
+	class_destroy(smem_class);
+err_cdev:
+	cdev_del(&smem_dev->cdev);
+err_region:
+	unregister_chrdev_region(smem_dev->dev, 1);
+err_free:
+	kfree(smem_dev);
+	smem_dev = NULL;
+	return ret;
+}
+EXPORT_SYMBOL_GPL(smem_init_debug);
+
+void smem_destroy_debug(void)
+{
+	if (!smem_dev)
+		return;
+
+	if (smem_dev->device) {
+		device_destroy(smem_class, smem_dev->dev);
+		smem_dev->device = NULL;
+	}
+
+	if (!IS_ERR_OR_NULL(smem_class))
+		class_destroy(smem_class);
+
+	unregister_chrdev_region(smem_dev->dev, 1);
+	cdev_del(&smem_dev->cdev);
+	kfree(smem_dev);
+	smem_dev = NULL;
+}
+EXPORT_SYMBOL_GPL(smem_destroy_debug);
 
 int smem_init_debugfs(void *root)
 {

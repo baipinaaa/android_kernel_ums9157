@@ -28,6 +28,9 @@
 #include <linux/sched.h>
 #include <linux/seq_file.h>
 #include <linux/slab.h>
+#include <linux/cdev.h>
+#include <linux/device.h>
+#include <linux/fs.h>
 #include <linux/uaccess.h>
 #include <linux/wait.h>
 #include <linux/poll.h>
@@ -1659,6 +1662,87 @@ static const struct file_operations sbuf_debug_fops = {
 	.llseek = seq_lseek,
 	.release = single_release,
 };
+
+struct sbuf_debug_dev {
+	dev_t dev;
+	struct cdev cdev;
+	struct device *device;
+};
+
+static struct sbuf_debug_dev *sbuf_dev;
+static struct class *sbuf_class;
+
+int sbuf_init_debug(void *arg)
+{
+	int ret;
+
+	sbuf_dev = kzalloc(sizeof(*sbuf_dev), GFP_KERNEL);
+	if (!sbuf_dev) {
+		pr_err("sprd-sbuf: Failed to alloc memory for sbuf dev\n");
+		return -ENOMEM;
+	}
+
+	ret = alloc_chrdev_region(&sbuf_dev->dev, 0, 1, "sbuf_debug");
+	if (ret) {
+		pr_err("sprd-sbuf: Failed to alloc chrdev region\n");
+		goto err_free;
+	}
+
+	cdev_init(&sbuf_dev->cdev, &sbuf_debug_fops);
+	ret = cdev_add(&sbuf_dev->cdev, sbuf_dev->dev, 1);
+	if (ret) {
+		pr_err("sprd-sbuf: Failed to add sbuf cdev\n");
+		goto err_region;
+	}
+
+	sbuf_class = class_create(THIS_MODULE, "sbuf");
+	if (IS_ERR(sbuf_class)) {
+		ret = PTR_ERR(sbuf_class);
+		goto err_cdev;
+	}
+
+	sbuf_dev->device = device_create(sbuf_class, NULL, sbuf_dev->dev,
+					 NULL, "sipc_sbuf");
+	if (IS_ERR(sbuf_dev->device)) {
+		ret = PTR_ERR(sbuf_dev->device);
+		sbuf_dev->device = NULL;
+		goto err_class;
+	}
+
+	return 0;
+
+err_class:
+	class_destroy(sbuf_class);
+err_cdev:
+	cdev_del(&sbuf_dev->cdev);
+err_region:
+	unregister_chrdev_region(sbuf_dev->dev, 1);
+err_free:
+	kfree(sbuf_dev);
+	sbuf_dev = NULL;
+	return ret;
+}
+EXPORT_SYMBOL_GPL(sbuf_init_debug);
+
+void sbuf_destroy_debug(void)
+{
+	if (!sbuf_dev)
+		return;
+
+	if (sbuf_dev->device) {
+		device_destroy(sbuf_class, sbuf_dev->dev);
+		sbuf_dev->device = NULL;
+	}
+
+	if (!IS_ERR_OR_NULL(sbuf_class))
+		class_destroy(sbuf_class);
+
+	unregister_chrdev_region(sbuf_dev->dev, 1);
+	cdev_del(&sbuf_dev->cdev);
+	kfree(sbuf_dev);
+	sbuf_dev = NULL;
+}
+EXPORT_SYMBOL_GPL(sbuf_destroy_debug);
 
 int sbuf_init_debugfs(void *root)
 {
