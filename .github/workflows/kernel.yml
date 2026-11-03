@@ -17,7 +17,7 @@ jobs:
       - name: 环境信息
         run: |
           nproc; free -g | head -2; df -h / | tail -1
-          gcc --version | head -1
+          aarch64-linux-gnu-gcc --version | head -1 || true
 
       - name: 安装依赖
         run: |
@@ -27,28 +27,44 @@ jobs:
 
       - name: defconfig
         run: |
-          make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- sprd_ums9157_defconfig 2>&1 | tail -20
-          grep -E "^(CONFIG_LTO|CONFIG_CFI|CONFIG_CC_IS)" .config || true
+          set -euo pipefail
+          make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- sprd_ums9157_defconfig 2>&1 | tee defconfig.log
+          test -f .config
+          echo "--- 生效的关键配置:"
+          grep -E "^(CONFIG_LTO|CONFIG_CFI|CONFIG_CC_IS|CONFIG_MODULES)=" .config || true
 
       - name: 编译 Image
         run: |
-          set -o pipefail
+          set -euo pipefail
           make -j2 ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- Image 2>&1 | tee build.log
-        continue-on-error: true
+          ls -l arch/arm64/boot/Image
+
+      - name: 编译 modules
+        run: |
+          set -euo pipefail
+          make -j2 ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- modules 2>&1 | tee modules.log
 
       - name: 错误摘要
-        if: always()
+        if: failure()
         run: |
-          echo "=== 首 80 条 error ==="
-          grep -nE "error:|Error [0-9]|fatal error" build.log | head -80 || echo "无"
-          echo "=== 最后 30 行 ==="
-          tail -30 build.log
+          for f in build.log modules.log defconfig.log; do
+            [ -f "$f" ] || continue
+            echo "=== $f: error 行 ==="
+            grep -nE "error:|Error [0-9]|fatal error|No rule to make" "$f" | head -40 || true
+            echo "=== $f: 最后 20 行 ==="
+            tail -20 "$f"
+          done
 
-      - name: 产物
+      - name: 上传产物
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: build-log
-          path: build.log
+          name: build-output
+          path: |
+            build.log
+            modules.log
+            defconfig.log
+            .config
+            arch/arm64/boot/Image
           retention-days: 14
           if-no-files-found: warn
