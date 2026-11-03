@@ -21,10 +21,12 @@
 #include <linux/slab.h>
 #include <linux/io.h>
 #include <linux/notifier.h>
+#include <linux/mutex.h>
 #include <linux/usb/sprd_usbm.h>
 
 struct sprd_usbm_event {
 	int max_supported;
+	struct mutex serialize;
 	struct raw_notifier_head nh[SPRD_USBM_EVENT_MAX];
 };
 
@@ -55,6 +57,40 @@ int call_sprd_usbm_event_notifiers(unsigned int id, unsigned long val, void *v)
 	return ret;
 }
 EXPORT_SYMBOL(call_sprd_usbm_event_notifiers);
+
+/*
+ * Consumers of the event chain (dwc3-sprd, phy-sprd-usb31) take this lock
+ * around the controller switch so that a notifier cannot observe a
+ * half-switched state.  The device .ko exports both halves and its
+ * disassembly is: load usb_event_sprd, if NULL printk(KERN_INFO
+ * "usb_event is null when do mutex lock") and return, otherwise
+ * mutex_(un)lock(&usb_event->serialize).
+ */
+void sprd_usbm_mutex_lock(void)
+{
+	struct sprd_usbm_event *usb_event = usb_event_sprd;
+
+	if (!usb_event) {
+		pr_info("usb_event is null when do mutex lock\n");
+		return;
+	}
+
+	mutex_lock(&usb_event->serialize);
+}
+EXPORT_SYMBOL(sprd_usbm_mutex_lock);
+
+void sprd_usbm_mutex_unlock(void)
+{
+	struct sprd_usbm_event *usb_event = usb_event_sprd;
+
+	if (!usb_event) {
+		pr_info("usb_event is null when do mutex unlock\n");
+		return;
+	}
+
+	mutex_unlock(&usb_event->serialize);
+}
+EXPORT_SYMBOL(sprd_usbm_mutex_unlock);
 
 /* get the musb status */
 int sprd_usbm_event_is_active(void)

@@ -73,6 +73,122 @@ err:
 }
 EXPORT_SYMBOL(ptn38003a_mode_usb32_set);
 
+/*
+ * The three DP helpers below are what sprd-drm's redriver glue calls.  Only
+ * PTN38003A_MODE_CONTROL (0x04) and register 0x06 carry the settings:
+ *   0x04 bits 2:0 -> mode, 0x02 = 32- and 4-lane DP
+ *   0x06 bits 3:2 -> lane count,  0x0c = 4 lanes (0x04 = 1 lane, 0x08 = 2)
+ *   0x06 bits 1:0 -> link rate,   0x01 = 0x0a, 0x02 = 0x14, 0x03 = 0x1e
+ * Anything else is left alone; the device still reads the register back for
+ * its log line.
+ */
+int ptn38003a_dp_lane_set(unsigned int lane)
+{
+	int val = 0, ret = 0;
+
+	pr_info("dp_lane_set");
+	if (!ptn38003a_redriver) {
+		printk(KERN_ERR "ptn38003a hadn't been probe.");
+		return -ENODEV;
+	}
+
+	ptn38003a_read(0x06, &val);
+	pr_info("ptn38003a_dp_lane_count_start:0x%x,0x%x", val, lane);
+
+	switch (lane & ~PTN38003A_AUTO_ORIENT_EN_MASK) {
+	case 1:
+		val = 0x04;
+		break;
+	case 2:
+		val = 0x08;
+		break;
+	case 4:
+		val = 0x0c;
+		break;
+	default:
+		val = 0;
+		if (lane)
+			goto readback;
+	}
+
+	ret = ptn38003a_reg_update_bits(0x06, 0x0c, val);
+
+readback:
+	ptn38003a_read(0x06, &val);
+	pr_info("ptn38003a_dp_lane_count_end:0x%x", val);
+	if (ret < 0) {
+		dev_err(ptn38003a_redriver->dev,
+			"set PTN38003A_DP_LANE failed: %d.", ret);
+		return ret;
+	}
+
+	return 0;
+}
+EXPORT_SYMBOL(ptn38003a_dp_lane_set);
+
+int ptn38003a_dp_link_rate_set(unsigned int rate)
+{
+	int val = 0, ret = 0;
+
+	pr_info("dp_link_rate_set");
+	if (!ptn38003a_redriver) {
+		printk(KERN_ERR "ptn38003a hadn't been probe.");
+		return -ENODEV;
+	}
+
+	ptn38003a_read(0x06, &val);
+	pr_info("ptn38003a_dp_link_rate_start:0x%x,0x%x", val, rate);
+
+	switch (rate) {
+	case 0x0a:
+		val = 1;
+		break;
+	case 0x14:
+		val = 2;
+		break;
+	case 0x1e:
+		val = 3;
+		break;
+	default:
+		goto readback;
+	}
+
+	ret = ptn38003a_reg_update_bits(0x06, 0x03, val);
+
+readback:
+	ptn38003a_read(0x06, &val);
+	pr_info("ptn38003a_dp_link_rate_end:0x%x", val);
+	if (ret < 0) {
+		dev_err(ptn38003a_redriver->dev,
+			"set PTN38003A_DP_LINK_RATE failed: %d.", ret);
+		return ret;
+	}
+
+	return 0;
+}
+EXPORT_SYMBOL(ptn38003a_dp_link_rate_set);
+
+int ptn38003a_dp_mode_set(unsigned int on)
+{
+	int ret;
+
+	if (!ptn38003a_redriver) {
+		printk(KERN_ERR "ptn38003a hadn't been probe.");
+		return -ENODEV;
+	}
+
+	ret = ptn38003a_reg_update_bits(PTN38003A_MODE_CONTROL,
+					PTN38003A_OPERATION_MODE_MASK, on ? 0x02 : 0);
+	if (ret < 0) {
+		dev_err(ptn38003a_redriver->dev,
+			"set PTN38003A_CONTROL_MODE failed: %d.", ret);
+		return ret;
+	}
+
+	return 0;
+}
+EXPORT_SYMBOL(ptn38003a_dp_mode_set);
+
 static ssize_t ptn38003a_show(struct device *dev,
 			struct device_attribute *attr,
 			char *buf)

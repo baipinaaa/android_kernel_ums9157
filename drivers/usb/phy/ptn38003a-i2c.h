@@ -27,6 +27,9 @@ struct redriver_ptn38003a {
 
 #if IS_ENABLED(CONFIG_SPRD_REDRIVER_PTN38003A)
 extern int ptn38003a_mode_usb32_set(unsigned int enable);
+extern int ptn38003a_dp_lane_set(unsigned int lane);
+extern int ptn38003a_dp_link_rate_set(unsigned int rate);
+extern int ptn38003a_dp_mode_set(unsigned int on);
 #else
 static inline int ptn38003a_mode_usb32_set(unsigned int enable) { return 0; }
 #endif
