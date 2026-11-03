@@ -156,6 +156,10 @@ extern long calc_load_fold_active(struct rq *this_rq, long adjust);
  */
 #define RUNTIME_INF		((u64)~0ULL)
 
+#ifdef CONFIG_SPRD_CORE_CTL
+void init_sched_groups_capacity(int cpu, struct sched_domain *sd);
+#endif
+
 static inline int idle_policy(int policy)
 {
 	return policy == SCHED_IDLE;
