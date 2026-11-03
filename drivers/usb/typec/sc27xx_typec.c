@@ -221,6 +221,35 @@ static const struct sprd_typec_variant_data ump9620_data = {
 	.event_mask = SC27XX_EVENT_MASK,
 };
 
+/*
+ * dr_swap state shared with the dwc3 glue: the vendor build keeps both flags
+ * as plain globals and exports only the getters.
+ */
+static int pd_dr_swap_event;
+static int typec_attach;
+
+int sc27xx_get_dr_swap_executing(void)
+{
+	return pd_dr_swap_event;
+}
+EXPORT_SYMBOL(sc27xx_get_dr_swap_executing);
+
+void sc27xx_set_dr_swap_executing(int event)
+{
+	pd_dr_swap_event = event;
+}
+
+int sc27xx_get_current_status_detach_or_attach(void)
+{
+	return typec_attach;
+}
+EXPORT_SYMBOL(sc27xx_get_current_status_detach_or_attach);
+
+void sc27xx_set_current_status_detach_or_attach(int attach)
+{
+	typec_attach = attach;
+}
+
 struct sc27xx_typec {
 	struct device *dev;
 	struct regmap *regmap;
@@ -303,6 +332,7 @@ static int sc27xx_typec_connect(struct sc27xx_typec *sc, u32 status)
 	switch (sc->state) {
 	case SC27XX_ATTACHED_SNK:
 	case SC27XX_DEBUG_CABLE:
+		typec_attach = 1;
 		sc->pre_state = SC27XX_ATTACHED_SNK;
 		extcon_set_state_sync(sc->edev, EXTCON_USB, true);
 		break;
@@ -358,6 +388,7 @@ static int sc27xx_typec_connect(struct sc27xx_typec *sc, u32 status)
 
 static void sc27xx_typec_disconnect(struct sc27xx_typec *sc, u32 status)
 {
+	typec_attach = 0;
 	typec_unregister_partner(sc->partner);
 	sc->partner = NULL;
 	typec_set_pwr_opmode(sc->port, TYPEC_PWR_MODE_USB);
