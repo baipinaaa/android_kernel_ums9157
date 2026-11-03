@@ -155,6 +155,17 @@ static int meminfo_proc_show(struct seq_file *m, void *v)
 	return 0;
 }
 
+#ifdef CONFIG_SPRD_SYSDUMP
+/*
+ * 设备内核镜像中没有 sprd_dump_meminfo 符号，302 树的实现依赖
+ * meminfo_proc_show(m=NULL) 的兼容写法；基线 meminfo.c 不支持 m=NULL，
+ * 因此这里保留空实现，仅用于满足 sysdump 的链接需求。
+ */
+void sprd_dump_meminfo(void)
+{
+}
+#endif
+
 static int __init proc_meminfo_init(void)
 {
 	proc_create_single("meminfo", 0, NULL, meminfo_proc_show);

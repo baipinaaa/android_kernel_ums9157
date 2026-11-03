@@ -126,6 +126,19 @@ static int test_task_flag(struct task_struct *p, int flag)
 	return 0;
 }
 
+/*
+ * 设备内核 Image 中不存在 reclaim_task_anon 符号，302 树与基线树都只有
+ * include/linux/mm.h 的声明而没有任何实现。这里补一个空实现保证链接；
+ * 代价是 process reclaim 不会真正回收页，其余逻辑保持原样。
+ */
+struct reclaim_param reclaim_task_anon(struct task_struct *task,
+				       int nr_to_reclaim)
+{
+	struct reclaim_param rp = { 0 };
+
+	return rp;
+}
+
 static void swap_fn(struct work_struct *work)
 {
 	struct task_struct *tsk;
