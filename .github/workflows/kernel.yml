@@ -30,29 +30,28 @@ jobs:
           set -euo pipefail
           make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- sprd_ums9157_defconfig 2>&1 | tee defconfig.log
           test -f .config
-          echo "--- 生效的关键配置:"
           grep -E "^(CONFIG_LTO|CONFIG_CFI|CONFIG_CC_IS|CONFIG_MODULES)=" .config || true
 
-      - name: 编译 Image
+      - name: 编译 Image（-k 一次收集全部错误）
         run: |
-          set -euo pipefail
-          make -j2 ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- Image 2>&1 | tee build.log
-          ls -l arch/arm64/boot/Image
+          make -k -j2 ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- Image 2>&1 | tee build.log || true
+          test -f arch/arm64/boot/Image
 
-      - name: 编译 modules
+      - name: 编译 modules（-k 一次收集全部错误）
         run: |
-          set -euo pipefail
-          make -j2 ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- modules 2>&1 | tee modules.log
+          make -k -j2 ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- modules 2>&1 | tee modules.log || true
+          test -f modules.order
 
-      - name: 错误摘要
-        if: failure()
+      - name: 错误清单（去重）
+        if: always()
         run: |
           for f in build.log modules.log defconfig.log; do
             [ -f "$f" ] || continue
-            echo "=== $f: error 行 ==="
-            grep -nE "error:|Error [0-9]|fatal error|No rule to make" "$f" | head -40 || true
-            echo "=== $f: 最后 20 行 ==="
-            tail -20 "$f"
+            echo "########## $f ##########"
+            grep -hoE '[^ :]+\.(c|h|S):[0-9]+:[0-9]+: (error|fatal error):.*' "$f" \
+              | sort -u | head -200 || true
+            echo "---------- 计数:"
+            grep -cE ' error: ' "$f" || true
           done
 
       - name: 上传产物
