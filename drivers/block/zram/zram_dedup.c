@@ -223,10 +223,10 @@ struct zram_entry *__zram_dedup_get(struct zram *zram,
 			ret = memcmp(addr, src, PAGE_SIZE);
 		} else {
 			zstrm = zcomp_stream_get(zram->comp);
-			ret = zcomp_decompress(zram->comp, zstrm, src, size, zstrm->buffer);
+			ret = zcomp_decompress(zstrm, src, size, zstrm->buffer);
 			if (!ret)
 				ret = memcmp(addr, zstrm->buffer, PAGE_SIZE);
-			zcomp_stream_put(zstrm);
+			zcomp_stream_put(zram->comp);
 		}
 		zs_unmap_object(zram->mem_pool, entry->handle);
 
