@@ -7,6 +7,15 @@
 #include <linux/regmap.h>
 #include "dw_dptx.h"
 
+/*
+ * Redriver (PTN38003A) sits between the DP PHY and the connector.  The vendor
+ * build programs it from the same place it programs the PHY: mode on before
+ * LINK_BW_SET, rate after it, lane count after LANE_COUNT_SET.
+ */
+extern int ptn38003a_dp_mode_set(unsigned int on);
+extern int ptn38003a_dp_link_rate_set(unsigned int rate);
+extern int ptn38003a_dp_lane_set(unsigned int lane);
+
 static int dptx_link_check_cr_done(struct dptx *dptx, bool *out_done)
 {
 	int ret_dpcd;
@@ -364,6 +373,8 @@ static int dptx_link_training_start(struct dptx *dptx)
 		return retval;
 
 	byte = retval;
+	ptn38003a_dp_mode_set(1);
+	ptn38003a_dp_link_rate_set(byte);
 	ret_dpcd = drm_dp_dpcd_writeb(&dptx->aux_dev, DP_LINK_BW_SET, byte);
 	if (ret_dpcd < 0)
 		return ret_dpcd;
@@ -383,6 +394,8 @@ static int dptx_link_training_start(struct dptx *dptx)
 	ret_dpcd = drm_dp_dpcd_writeb(&dptx->aux_dev, DP_LANE_COUNT_SET, byte);
 	if (ret_dpcd < 0)
 		return ret_dpcd;
+
+	ptn38003a_dp_lane_set(dptx->link.lanes);
 
 	/* check if SSC is enabled and program DPCD */
 	if (dptx->ssc_en && dptx_sink_enabled_ssc(dptx))
