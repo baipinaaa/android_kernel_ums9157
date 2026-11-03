@@ -1,0 +1,2 @@
+sound/soc/sprd/audio-smsg.c
+sound/soc/sprd/audio-sipc.c

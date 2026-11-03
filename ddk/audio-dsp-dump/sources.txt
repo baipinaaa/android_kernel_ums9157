@@ -1,0 +1,2 @@
+sound/soc/sprd/audio_sblock.c
+sound/soc/sprd/audio_dsp_dump.c
