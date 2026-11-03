@@ -1439,6 +1439,15 @@ done:
 }
 
 
+int musb_reset_all_fifo_2_default(struct musb *musb)
+{
+	pr_debug("%s: set %s FIFO setting
+", musb_driver_name,
+		 is_host_active(musb) ? "Host" : "Device");
+	return ep_config_from_table(musb);
+}
+EXPORT_SYMBOL_GPL(musb_reset_all_fifo_2_default);
+
 /*
  * ep_config_from_hw - when MUSB_C_DYNFIFO_DEF is false
  * @param musb the controller

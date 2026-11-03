@@ -1012,7 +1012,7 @@ static ssize_t comp_algorithm_show(struct device *dev,
 	struct zram *zram = dev_to_zram(dev);
 
 	down_read(&zram->init_lock);
-	sz = zcomp_available_show(zram->compressor, buf);
+	sz = zcomp_available_show(zram->compressor, buf, 0);
 	up_read(&zram->init_lock);
 
 	return sz;
@@ -1031,7 +1031,7 @@ static ssize_t comp_algorithm_store(struct device *dev,
 	if (sz > 0 && compressor[sz - 1] == '\n')
 		compressor[sz - 1] = 0x00;
 
-	if (!zcomp_available_algorithm(compressor))
+	if (!zcomp_lookup_backend_name(compressor))
 		return -EINVAL;
 
 	down_write(&zram->init_lock);
@@ -1400,9 +1400,9 @@ static int __zram_bvec_read(struct zram *zram, struct page *page, u32 index,
 		struct zcomp_strm *zstrm = zcomp_stream_get(zram->comp);
 
 		dst = kmap_atomic(page);
-		ret = zcomp_decompress(zstrm, src, size, dst);
+		ret = zcomp_decompress(zram->comp, zstrm, src, size, dst);
 		kunmap_atomic(dst);
-		zcomp_stream_put(zram->comp);
+		zcomp_stream_put(zstrm);
 	}
 	zs_unmap_object(zram->mem_pool, handle);
 	zram_slot_unlock(zram, index);
@@ -1486,11 +1486,11 @@ static int __zram_bvec_write(struct zram *zram, struct bio_vec *bvec,
 compress_again:
 	zstrm = zcomp_stream_get(zram->comp);
 	src = kmap_atomic(page);
-	ret = zcomp_compress(zstrm, src, &comp_len);
+	ret = zcomp_compress(zram->comp, zstrm, src, &comp_len);
 	kunmap_atomic(src);
 
 	if (unlikely(ret)) {
-		zcomp_stream_put(zram->comp);
+		zcomp_stream_put(zstrm);
 		pr_err("Compression failed! err=%d\n", ret);
 		/* 慢路径 goto compress_again 之后再失败时 handle 已分配，要还回去
 		 * （0x4040 的 `cbz x21` 就是这里的 `if (handle)`）*/
@@ -1528,7 +1528,7 @@ compress_again:
 				__GFP_MOVABLE |
 				__GFP_CMA);
 	if (!handle) {
-		zcomp_stream_put(zram->comp);
+		zcomp_stream_put(zstrm);
 		atomic64_inc(&zram->stats.writestall);
 		handle = zram_entry_alloc(zram, comp_len,
 				GFP_NOIO | __GFP_HIGHMEM |
@@ -1542,7 +1542,7 @@ compress_again:
 	update_used_max(zram, alloced_pages);
 
 	if (zram->limit_pages && alloced_pages > zram->limit_pages) {
-		zcomp_stream_put(zram->comp);
+		zcomp_stream_put(zstrm);
 		zram_entry_free(zram, handle);
 		return -ENOMEM;
 	}
@@ -1557,7 +1557,7 @@ compress_again:
 	if (comp_len == PAGE_SIZE)
 		kunmap_atomic(src);
 
-	zcomp_stream_put(zram->comp);
+	zcomp_stream_put(zstrm);
 	zs_unmap_object(zram->mem_pool, zram_entry_to_handle(zram, handle));
 	atomic64_add(comp_len, &zram->stats.compr_data_size);
 
@@ -1904,7 +1904,7 @@ static ssize_t disksize_store(struct device *dev,
 		goto out_unlock;
 	}
 
-	comp = zcomp_create(zram->compressor);
+	comp = zcomp_create(zram->compressor, &zram->params);
 	if (IS_ERR(comp)) {
 		pr_err("Cannot initialise %s compressing backend\n",
 				zram->compressor);
@@ -2109,6 +2109,9 @@ static int zram_add(void)
 	zram = kzalloc(sizeof(struct zram), GFP_KERNEL);
 	if (!zram)
 		return -ENOMEM;
+
+	zram->params.level = ZCOMP_PARAM_NOT_SET;
+	zram->params.deflate.winbits = ZCOMP_PARAM_NOT_SET;
 
 	ret = idr_alloc(&zram_index_idr, zram, 0, 0, GFP_KERNEL);
 	if (ret < 0)

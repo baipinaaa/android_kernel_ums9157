@@ -1306,6 +1306,8 @@ static void ufshcd_print_pwr_info(struct device *dev, const char *tag,
  */
 static int ufs_get_sprd_pwr_now(struct ufs_hba *hba, u32 *raw)
 {
+	u32 v;
+
 	ufshcd_dme_get_attr(hba, UFS_DME_GEAR_RX_PRE, &raw[0], 0);
 	ufshcd_dme_get_attr(hba, UFS_DME_LANE_RX_PRE, &raw[1], 0);
 	ufshcd_dme_get_attr(hba, UFS_DME_GEAR_TX_PRE, &raw[2], 0);

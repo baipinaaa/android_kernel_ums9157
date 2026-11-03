@@ -41,6 +41,7 @@
 #include <linux/regmap.h>
 #include <linux/sched.h>
 #include <linux/slab.h>
+#include <uapi/linux/sched/types.h>
 #include <linux/spinlock.h>
 #include <linux/usb/phy.h>
 #include <uapi/linux/usb/charger.h>
