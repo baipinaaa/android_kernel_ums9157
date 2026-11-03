@@ -1259,7 +1259,7 @@ struct vm_area_struct *__vma_merge(struct mm_struct *mm,
 			struct anon_vma *anon_vma, struct file *file,
 			pgoff_t pgoff, struct mempolicy *policy,
 			struct vm_userfaultfd_ctx vm_userfaultfd_ctx,
-			const char __user *anon_name)
+			const char __user *anon_name, bool keep_locked)
 {
 	pgoff_t pglen = (end - addr) >> PAGE_SHIFT;
 	struct vm_area_struct *area, *next;
@@ -3416,7 +3416,7 @@ struct vm_area_struct *copy_vma(struct vm_area_struct **vmap,
 	 */
 	new_vma = __vma_merge(mm, prev, addr, addr + len, vma->vm_flags,
 			    vma->anon_vma, vma->vm_file, pgoff, vma_policy(vma),
-			    vma->vm_userfaultfd_ctx, vma_get_anon_name(vma));
+			    vma->vm_userfaultfd_ctx, vma_get_anon_name(vma), false);
 	if (new_vma) {
 		/*
 		 * Source vma may have been merged into new_vma

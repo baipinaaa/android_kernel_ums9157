@@ -130,9 +130,12 @@ static void ioprio_free_cpd(struct blkcg_policy_data *cpd)
 }
 
 static struct blkg_policy_data *ioprio_alloc_pd(gfp_t gfp,
-						struct request_queue *q)
+						struct request_queue *q,
+						struct blkcg *blkcg)
 {
 	struct ioprio_blkg *blkg;
+
+	(void)blkcg;
 
 	blkg = kzalloc(sizeof(*blkg), gfp);
 	if (!blkg)

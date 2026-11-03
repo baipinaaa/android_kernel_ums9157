@@ -60,17 +60,6 @@ enum pwm_output_type {
 	PWM_OUTPUT_MODULATED = 1 << 1,
 };
 
-/**
- * enum pwm_output_type - output type of the PWM signal
- * @PWM_OUTPUT_FIXED: PWM output is fixed until a change request
- * @PWM_OUTPUT_MODULATED: PWM output is modulated in hardware
- * autonomously with a predefined pattern
- */
-enum pwm_output_type {
-	PWM_OUTPUT_FIXED = 1 << 0,
-	PWM_OUTPUT_MODULATED = 1 << 1,
-};
-
 /*
  * struct pwm_state - state of a PWM channel
  * @period: PWM period (in nanoseconds)

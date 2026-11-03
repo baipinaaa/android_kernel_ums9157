@@ -10,7 +10,7 @@
 #include <linux/cpuhotplug.h>
 #include <linux/rcupdate.h>
 #include <linux/sched.h>
-#include <linux/sched/types.h>
+#include <uapi/linux/sched/types.h>
 
 #include <trace/events/erofs.h>
 

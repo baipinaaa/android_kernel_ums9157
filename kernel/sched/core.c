@@ -80,6 +80,9 @@ __read_mostly int scheduler_running;
  */
 int sysctl_sched_rt_runtime = 950000;
 
+/* record the min capacity cpus */
+struct cpumask min_cap_cpu_mask;
+
 /*
  * __task_rq_lock - lock the rq @p resides on.
  */

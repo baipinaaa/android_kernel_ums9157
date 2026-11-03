@@ -17,6 +17,10 @@
 #include <linux/cpu.h>
 #include <linux/cpufreq.h>
 #include <linux/cpufreq_times.h>
+
+/* EAS: rebuild sched domains when the schedutil governor is switched */
+extern void sched_cpufreq_governor_change(struct cpufreq_policy *policy,
+					  struct cpufreq_governor *old_gov);
 #include <linux/cpu_cooling.h>
 #include <linux/delay.h>
 #include <linux/device.h>

@@ -138,14 +138,14 @@ static irqreturn_t sprd_keypad_handler(int irq, void *dev_id)
 			   (cols & 0x7));
 
 		if (bits & BIT(0)) {
-			input_event(input, EV_KEY, input->keycode[idx], 1);
+			input_event(input, EV_KEY, ((unsigned short *)input->keycode)[idx], 1);
 			input_event(input, EV_SYN, 0, 0);
 		}
 
 		printk("[key-test]input_event_up press %d \n", bits & 1);
 
 		if (bits & BIT(4)) {
-			input_event(input, EV_KEY, input->keycode[idx], 0);
+			input_event(input, EV_KEY, ((unsigned short *)input->keycode)[idx], 0);
 			input_event(input, EV_SYN, 0, 0);
 		}
 	}
@@ -218,10 +218,10 @@ static int sprd_keypad_probe(struct platform_device *pdev)
 		goto out_print;
 	}
 
-	if (fwnode_property_read_int_array(dev_fwnode(dev), "keypad,num-rows",
-					   sizeof(u32), &priv->num_rows, 1) ||
-	    fwnode_property_read_int_array(dev_fwnode(dev), "keypad,num-columns",
-					   sizeof(u32), &priv->num_cols, 1) ||
+	if (fwnode_property_read_u32_array(dev_fwnode(dev), "keypad,num-rows",
+					   &priv->num_rows, 1) ||
+	    fwnode_property_read_u32_array(dev_fwnode(dev), "keypad,num-columns",
+					   &priv->num_cols, 1) ||
 	    !priv->num_rows || !priv->num_cols) {
 		dev_err(dev, "number of keypad rows/columns not specified\n");
 		ret = -EINVAL;
@@ -304,7 +304,7 @@ static int sprd_keypad_probe(struct platform_device *pdev)
 
 		for (i = 0; i < priv->num_rows; i++) {
 			for (j = 0; j < priv->num_cols; j++) {
-				if (!priv->input->keycode[(i << row_shift) + j])
+				if (!((unsigned short *)priv->input->keycode)[(i << row_shift) + j])
 					continue;
 				row_map |= BIT(i);
 				col_map |= BIT(j);
