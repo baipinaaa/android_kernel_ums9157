@@ -1,3 +1,0 @@
-drivers/misc/sprd_sensor/sprd_sensor_core.c
-drivers/misc/sprd_sensor/sprd_sensor_drv.c
-drivers/misc/sprd_sensor/csi_driver.c

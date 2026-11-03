@@ -1,5 +1,0 @@
-config SND_SOC_TFA98XX
-	bool "Support Goodix smartpa driver"
-
-config SND_SOC_TFA98XX_SINGLE
-	bool "Support Goodix smartpa driver"

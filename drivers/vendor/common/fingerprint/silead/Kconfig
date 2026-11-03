@@ -1,9 +1,0 @@
-#
-# Silead Fingerprint driver configuration
-#
-
-config PLATFORM_FINGERPRINT_SILEAD
-       bool "Silead Fingerprint driver support"
-       default n
-       help
-       This supports Silead Fingerprint drivers.

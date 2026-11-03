@@ -1,9 +1,0 @@
-drivers/input/touchscreen/synaptics_td4320_spi/synaptics_tcm_core.c
-drivers/input/touchscreen/synaptics_td4320_spi/synaptics_tcm_device.c
-drivers/input/touchscreen/synaptics_td4320_spi/synaptics_tcm_diag.c
-drivers/input/touchscreen/synaptics_td4320_spi/synaptics_tcm_recovery.c
-drivers/input/touchscreen/synaptics_td4320_spi/synaptics_tcm_reflash.c
-drivers/input/touchscreen/synaptics_td4320_spi/synaptics_tcm_spi.c
-drivers/input/touchscreen/synaptics_td4320_spi/synaptics_tcm_testing.c
-drivers/input/touchscreen/synaptics_td4320_spi/synaptics_tcm_touch.c
-drivers/input/touchscreen/synaptics_td4320_spi/synaptics_tcm_zeroflash.c
