@@ -63,6 +63,17 @@ jobs:
                 echo "::error::$line"
               done
 
+      - name: 打包 boot.img（可直接刷）
+        if: always()
+        run: |
+          if [ -f arch/arm64/boot/Image ]; then
+            python3 scripts/pack_boot.py --kernel arch/arm64/boot/Image --out boot.img --pad-to 67108864
+            python3 scripts/pack_boot.py --verify boot.img
+            ls -lh boot.img
+          else
+            echo "没有 Image，跳过打包"
+          fi
+
       - name: 收集模块（.ko）
         if: always()
         run: |
@@ -81,6 +92,7 @@ jobs:
             defconfig.log
             .config
             arch/arm64/boot/Image
+            boot.img
             modules.tgz
             Module.symvers
           include-hidden-files: true
