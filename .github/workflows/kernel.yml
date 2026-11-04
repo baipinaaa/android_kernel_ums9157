@@ -82,6 +82,7 @@ jobs:
             .config
             arch/arm64/boot/Image
             modules.tgz
+            Module.symvers
           include-hidden-files: true
           retention-days: 14
           if-no-files-found: warn
