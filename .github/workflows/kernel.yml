@@ -63,6 +63,13 @@ jobs:
                 echo "::error::$line"
               done
 
+      - name: 收集模块（.ko）
+        if: always()
+        run: |
+          find . -path ./.git -prune -o -name '*.ko' -print0 | tar --null -czf modules.tgz -T - || true
+          ls -lh modules.tgz 2>/dev/null || true
+          echo "ko count: $(tar -tzf modules.tgz 2>/dev/null | grep -c '\.ko$' || echo 0)"
+
       - name: 上传产物
         if: always()
         uses: actions/upload-artifact@v4
@@ -74,5 +81,7 @@ jobs:
             defconfig.log
             .config
             arch/arm64/boot/Image
+            modules.tgz
+          include-hidden-files: true
           retention-days: 14
           if-no-files-found: warn
