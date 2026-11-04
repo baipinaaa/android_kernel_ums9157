@@ -73,18 +73,17 @@ jobs:
           # 设备: 5.4.210-android12-9-g96901d45d5a5-ab50 SMP preempt mod_unload aarch64
           KO=$(find . -name 'dwc3-sprd-core.ko' | head -1)
           if [ -n "$KO" ]; then
-            VM=$(python3 - "$KO" <<'PY'
-import sys
-d=open(sys.argv[1],'rb').read()
-i=d.find(b'vermagic=')
-print(d[i:i+110].split(b'\x00')[0].decode() if i>=0 else 'NOT FOUND')
-PY
-)
-            echo "$VM"
+            VM=$(strings -a "$KO" | grep -m1 '^vermagic=')
+            echo "got: $VM"
             case "$VM" in
-              *"5.4.210-android12-9-g96901d45d5a5-ab50 SMP preempt mod_unload aarch64") echo "OK: vermagic 与设备一致" ;;
-              *) echo "::error::vermagic 与设备不一致: $VM"; exit 1 ;;
+              "vermagic=5.4.210-android12-9-g96901d45d5a5-ab50 SMP preempt mod_unload aarch64")
+                echo "OK: vermagic 与设备逐字符一致" ;;
+              *)
+                echo "::error::vermagic 与设备不一致: $VM"
+                exit 1 ;;
             esac
+          else
+            echo "没有 dwc3-sprd-core.ko，跳过"
           fi
 
       - name: 打包 boot.img（可直接刷）
