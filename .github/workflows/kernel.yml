@@ -23,7 +23,10 @@ jobs:
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y -qq bc bison flex libssl-dev libelf-dev \
-            gcc-aarch64-linux-gnu binutils-aarch64-linux-gnu
+            clang lld llvm gcc-aarch64-linux-gnu binutils-aarch64-linux-gnu
+          echo "--- clang:"; clang --version | head -1
+          echo "--- lld:";   ld.lld --version | head -1
+          echo "--- llvm-ar:"; llvm-ar --version | head -1
 
       - name: defconfig
         run: |
@@ -32,18 +35,26 @@ jobs:
           # scripts/setlocalversion 就会把 vermagic 变成 '...-ab50+'，与设备不符。
           # 该脚本开头检测到 .scmversion 就只输出它的内容，空文件 => 无 '+'。
           : > .scmversion
-          make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- sprd_ums9157_defconfig 2>&1 | tee defconfig.log
+          # 必须用 clang：设备内核是 CC_IS_CLANG + LTO_CLANG + CFI_CLANG + SHADOW_CALL_STACK，
+          # 用 gcc 编时这四个符号会被 olddefconfig 静默丢弃（defconfig 里写了也没用），
+          # 结果内核没有 __cfi_slowpath、也不维护 x18，原厂 .ko 的 SCS 序言会写到垃圾地址，
+          # 模块加载/调用即崩 —— 这是「卡第一屏后重启」的真正原因（不是 vermagic）。
+          make LLVM=1 ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- sprd_ums9157_defconfig 2>&1 | tee defconfig.log
           test -f .config
-          grep -E "^(CONFIG_LTO|CONFIG_CFI|CONFIG_CC_IS|CONFIG_MODULES)=" .config || true
+          # 硬校验：这四项是本内核能加载设备原厂模块的前提
+          for c in CONFIG_CC_IS_CLANG CONFIG_LTO_CLANG CONFIG_CFI_CLANG CONFIG_SHADOW_CALL_STACK; do
+            grep -q "^$c=y" .config || { echo "ERROR: $c 没有生效（工具链用错了？）"; exit 1; }
+          done
+          grep -E "^(CONFIG_CC_IS|CONFIG_LTO|CONFIG_CFI|CONFIG_SHADOW_CALL|CONFIG_CLANG_VERSION|CONFIG_LLD_VERSION)" .config
 
       - name: 编译 Image（-k 一次收集全部错误）
         run: |
-          make -k -j2 ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- Image 2>&1 | tee build.log || true
+          make -k -j2 LLVM=1 ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- Image 2>&1 | tee build.log || true
           test -f arch/arm64/boot/Image
 
       - name: 编译 modules（-k 一次收集全部错误）
         run: |
-          make -k -j2 ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- modules 2>&1 | tee modules.log || true
+          make -k -j2 LLVM=1 ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- modules 2>&1 | tee modules.log || true
           test -f modules.order
 
       - name: 错误清单（去重）
