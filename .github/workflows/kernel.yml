@@ -28,6 +28,10 @@ jobs:
       - name: defconfig
         run: |
           set -euo pipefail
+          # 屏蔽 scm_version 追加的 '+'：CI checkout 后 git status 会报脏，
+          # scripts/setlocalversion 就会把 vermagic 变成 '...-ab50+'，与设备不符。
+          # 该脚本开头检测到 .scmversion 就只输出它的内容，空文件 => 无 '+'。
+          : > .scmversion
           make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- sprd_ums9157_defconfig 2>&1 | tee defconfig.log
           test -f .config
           grep -E "^(CONFIG_LTO|CONFIG_CFI|CONFIG_CC_IS|CONFIG_MODULES)=" .config || true
@@ -62,6 +66,26 @@ jobs:
             | sed 's/^ *//' | sort -u | head -25 | while IFS= read -r line; do
                 echo "::error::$line"
               done
+
+      - name: 校验 vermagic 与设备一致
+        if: always()
+        run: |
+          # 设备: 5.4.210-android12-9-g96901d45d5a5-ab50 SMP preempt mod_unload aarch64
+          KO=$(find . -name 'dwc3-sprd-core.ko' | head -1)
+          if [ -n "$KO" ]; then
+            VM=$(python3 - "$KO" <<'PY'
+import sys
+d=open(sys.argv[1],'rb').read()
+i=d.find(b'vermagic=')
+print(d[i:i+110].split(b'\x00')[0].decode() if i>=0 else 'NOT FOUND')
+PY
+)
+            echo "$VM"
+            case "$VM" in
+              *"5.4.210-android12-9-g96901d45d5a5-ab50 SMP preempt mod_unload aarch64") echo "OK: vermagic 与设备一致" ;;
+              *) echo "::error::vermagic 与设备不一致: $VM"; exit 1 ;;
+            esac
+          fi
 
       - name: 打包 boot.img（可直接刷）
         if: always()
