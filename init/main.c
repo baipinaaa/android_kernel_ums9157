@@ -1506,6 +1506,8 @@ static noinline void __init kernel_init_freeable(void)
 #include <linux/fs.h>
 #include <linux/kmsg_dump.h>
 #include <linux/notifier.h>
+#include <linux/blkdev.h>
+#include <linux/buffer_head.h>
 
 /*
  * Boot watchdog: when userspace dies (init exits 127 -> "Attempted to kill
@@ -1516,40 +1518,82 @@ static noinline void __init kernel_init_freeable(void)
  * (mmcblk0p48, 512 MB, survives flashing) instead.  sysdumpdb already proved
  * the panic really is ours: "Attempted to kill init! exitcode=0x00007f00".
  */
+static int bb_write_locked(struct block_device *bdev, loff_t *ppos,
+			   const char *buf, size_t len)
+{
+	size_t bsz = PAGE_SIZE;
+	size_t done = 0;
+
+	while (done < len) {
+		struct buffer_head *bh;
+		size_t boff = *ppos & (bsz - 1);
+		size_t chunk = min(len - done, bsz - boff);
+
+		bh = __getblk(bdev, *ppos >> PAGE_SHIFT, bsz);
+		if (!bh)
+			return done ? done : -ENOMEM;
+		memcpy(bh->b_data + boff, buf + done, chunk);
+		mark_buffer_dirty(bh);
+		sync_dirty_buffer(bh);
+		brelse(bh);
+		*ppos += chunk;
+		done += chunk;
+	}
+	return done;
+}
+
 static int boot_wd_dump(void)
 {
-	struct file *f;
-	loff_t pos = 0;
+	struct block_device *bdev;
 	struct kmsg_dumper dumper = { };
 	char line[1024];
-	size_t len;
+	size_t len, total = 0, skip;
+	loff_t pos = 0;
 	int n = 0;
 
-	f = filp_open("/dev/mmcblk0p48", O_WRONLY | O_LARGEFILE, 0);
-	if (IS_ERR(f))
-		f = filp_open("/dev/block/by-name/blackbox",
-			       O_WRONLY | O_LARGEFILE, 0);
-	if (IS_ERR(f)) {
-		pr_err("boot_wd: cannot open blackbox: %ld\n", PTR_ERR(f));
+	/*
+	 * Do not use filp_open("/dev/mmcblk0p48"): /dev is a tmpfs mounted by
+	 * init and the nodes come from ueventd, so when init dies early the
+	 * path does not resolve (that is why the first two attempts left
+	 * blackbox empty).  Open the block device by dev_t instead:
+	 * blackbox = mmcblk0p48 = 259:41.
+	 */
+	bdev = blkdev_get_by_dev(MKDEV(259, 41), FMODE_READ | FMODE_WRITE,
+				 NULL);
+	if (IS_ERR(bdev)) {
+		pr_err("boot_wd: no blackbox bdev: %ld
+", PTR_ERR(bdev));
 		return -1;
 	}
-	kernel_write(f, "BWD1\n", 5, &pos);
+	set_blocksize(bdev, PAGE_SIZE);
+
+	/* First pass: count lines and keep only the tail -- the init failure
+	 * is at the very end of the log. */
+	kmsg_dump_rewind(&dumper);
+	while (kmsg_dump_get_line(&dumper, false, line, sizeof(line), &len))
+		total++;
+	skip = total > 4096 ? total - 4096 : 0;
+
+	bb_write_locked(bdev, &pos, "BWD1
+", 5);
+
 	kmsg_dump_rewind(&dumper);
 	while (kmsg_dump_get_line(&dumper, false, line, sizeof(line), &len)) {
-		if (kernel_write(f, line, len, &pos) != len)
+		if (skip) {
+			skip--;
+			continue;
+		}
+		if (bb_write_locked(bdev, &pos, line, len) != len)
 			break;
-		if (++n >= 20000 || pos >= 4 * 1024 * 1024)
+		if (++n >= 4096)
 			break;
 	}
-	kernel_write(f, "\nBWD_END\n", 9, &pos);
-	/*
-	 * kernel_write() only dirties the page cache of a block device; without
-	 * an explicit flush the data is lost on the reset that follows.  This is
-	 * why the first blackbox attempt read back empty.
-	 */
-	vfs_fsync(f, 0);
-	filp_close(f, NULL);
-	pr_info("boot_wd: dumped %d lines to blackbox\n", n);
+	bb_write_locked(bdev, &pos, "
+BWD_END
+", 9);
+	pr_info("boot_wd: dumped %d/%d lines to blackbox
+", n, total);
+	blkdev_put(bdev, FMODE_READ | FMODE_WRITE);
 	return n;
 }
 
