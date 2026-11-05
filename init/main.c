@@ -25,6 +25,7 @@
 #include <linux/delay.h>
 #include <linux/ioport.h>
 #include <linux/init.h>
+#include <linux/timer.h>
 #include <linux/initrd.h>
 #include <linux/memblock.h>
 #include <linux/acpi.h>
@@ -1536,8 +1537,24 @@ static int boot_wd_thread(void *unused)
 	return 0;
 }
 
+static struct timer_list boot_wd_timer;
+
+/*
+ * The kthread above may never run if userspace deadlocks a CPU or leaves
+ * interrupts in a bad state.  The timer fires from softirq context, so it
+ * still gets a chance even when no task can be scheduled.  Forcing the
+ * panic unconditionally is intentional: this build exists only to capture
+ * one boot log into ramoops, and the log is worth more than a working boot.
+ */
+static void boot_wd_panic(struct timer_list *t)
+{
+	panic("boot_wd: 90s after late_initcall, forcing panic to capture the log");
+}
+
 static int __init boot_wd_init(void)
 {
+	timer_setup(&boot_wd_timer, boot_wd_panic, 0);
+	mod_timer(&boot_wd_timer, jiffies + 90 * HZ);
 	kthread_run(boot_wd_thread, NULL, "boot_wd");
 	return 0;
 }
