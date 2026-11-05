@@ -48,6 +48,10 @@
 #include <linux/writeback.h>
 #include <linux/cpu.h>
 #include <linux/cpuset.h>
+#include <linux/namei.h>
+#include <linux/fs.h>
+#include <linux/kdev_t.h>
+#include <linux/err.h>
 #include <linux/cgroup.h>
 #include <linux/efi.h>
 #include <linux/tick.h>
@@ -1379,6 +1383,65 @@ void __weak free_initmem(void)
 	free_initmem_default(POISON_FREE_INITMEM);
 }
 
+/*
+ * Print what the future /init will see.  Android first-stage init logs through
+ * /dev/kmsg; if that node is missing or not writable every message it emits is
+ * dropped silently, which is what makes the current boot failure invisible.
+ * This runs from kernel_init_freeable() while __init memory is still alive.
+ */
+static void __init inspect_env(void)
+{
+	struct path p;
+	struct file *f;
+	int ret;
+
+	ret = kern_path("/init", LOOKUP_FOLLOW, &p);
+	pr_err("inspect: /init ret=%d\n", ret);
+	if (!ret) {
+		pr_err("inspect: /init mode=%o size=%lld\n",
+		       p.dentry->d_inode->i_mode,
+		       (long long)i_size_read(p.dentry->d_inode));
+		path_put(&p);
+	}
+
+	ret = kern_path("/dev", LOOKUP_FOLLOW, &p);
+	pr_err("inspect: /dev ret=%d\n", ret);
+	if (!ret) {
+		pr_err("inspect: /dev fs=%s\n", p.dentry->d_sb->s_type->name);
+		path_put(&p);
+	}
+
+	ret = kern_path("/dev/kmsg", LOOKUP_FOLLOW, &p);
+	pr_err("inspect: /dev/kmsg ret=%d\n", ret);
+	if (!ret) {
+		pr_err("inspect: /dev/kmsg mode=%o rdev=%u:%u\n",
+		       p.dentry->d_inode->i_mode,
+		       MAJOR(p.dentry->d_inode->i_rdev),
+		       MINOR(p.dentry->d_inode->i_rdev));
+		path_put(&p);
+	}
+
+	f = filp_open("/dev/kmsg", O_WRONLY | O_NONBLOCK, 0);
+	pr_err("inspect: open /dev/kmsg=%ld\n", PTR_ERR_OR_ZERO(f));
+	if (!IS_ERR(f)) {
+		ret = kernel_write(f, "inspect: kmsg writable\n", 23, &f->f_pos);
+		pr_err("inspect: write /dev/kmsg=%d\n", ret);
+		filp_close(f, NULL);
+	}
+
+	f = filp_open("/dev/console", O_WRONLY, 0);
+	pr_err("inspect: open /dev/console=%ld\n", PTR_ERR_OR_ZERO(f));
+	if (!IS_ERR(f))
+		filp_close(f, NULL);
+
+	ret = kern_path("/proc", LOOKUP_FOLLOW, &p);
+	pr_err("inspect: /proc ret=%d\n", ret);
+	if (!ret) {
+		pr_err("inspect: /proc fs=%s\n", p.dentry->d_sb->s_type->name);
+		path_put(&p);
+	}
+}
+
 static int __ref kernel_init(void *unused)
 {
 	int ret;
@@ -1496,6 +1559,8 @@ static noinline void __init kernel_init_freeable(void)
 	 * rootfs is available now, try loading the public keys
 	 * and default modules
 	 */
+
+	inspect_env();
 
 	integrity_load_keys();
 }
