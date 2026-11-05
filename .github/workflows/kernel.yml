@@ -28,6 +28,17 @@ jobs:
           echo "--- lld:";   ld.lld --version | head -1
           echo "--- llvm-ar:"; llvm-ar --version | head -1
 
+      - name: 加 swap（LTO+CFI 编译很吃内存，7G 的 runner 会 OOM）
+        run: |
+          # 上一次 run 就是跑到 73 分钟时 "The hosted runner lost communication
+          # with the server"，即被 OOM killer 干掉了。LTO 链接阶段单进程要几 GB。
+          sudo fallocate -l 12G /swapfile 2>/dev/null || \
+            sudo dd if=/dev/zero of=/swapfile bs=1M count=12288 status=none
+          sudo chmod 600 /swapfile
+          sudo mkswap /swapfile >/dev/null
+          sudo swapon /swapfile
+          free -g
+
       - name: defconfig
         run: |
           set -euo pipefail
