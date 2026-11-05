@@ -1634,6 +1634,33 @@ static int boot_wd_thread(void *unused)
 	return 0;
 }
 
+/*
+ * Write a marker once from normal context, before init runs.  If BWD_TEST
+ * shows up in blackbox but the panic dump does not, the block device path
+ * is fine and the problem is the panic context (I/O cannot complete);
+ * if the marker is missing too, 259:41 is wrong on this device.
+ */
+static int __init boot_wd_test_write(void)
+{
+	struct block_device *bdev;
+	loff_t pos = PAGE_SIZE;
+
+	bdev = blkdev_get_by_dev(MKDEV(259, 41), FMODE_READ | FMODE_WRITE, NULL);
+	if (IS_ERR(bdev)) {
+		pr_err("boot_wd: test open failed: %ld
+", PTR_ERR(bdev));
+		return PTR_ERR(bdev);
+	}
+	set_blocksize(bdev, PAGE_SIZE);
+	bb_write_locked(bdev, &pos, "BWD_TEST
+", 9);
+	blkdev_put(bdev, FMODE_READ | FMODE_WRITE);
+	pr_info("boot_wd: test marker written
+");
+	return 0;
+}
+late_initcall(boot_wd_test_write);
+
 static int __init boot_wd_init(void)
 {
 	atomic_notifier_chain_register(&panic_notifier_list, &boot_wd_nb);
