@@ -11,7 +11,10 @@ Android 13 (header v4) 的 boot 分区不是"Image 直接写进去"，而是一�
 模板从哪来
 ---------
 `scripts/boot_assets/boot_header_v4.bin` = 设备原厂 boot_a 的前 4096 字节，
-`scripts/boot_assets/ramdisk.cpio.lz4` = 原厂 ramdisk（1,167,209 B，lz4_legacy）。
+`scripts/boot_assets/ramdisk.cpio.lz4` = 原厂 ramdisk（1,471,146 B，lz4_legacy；
+从 boot_a.bin 的 offset 0x248a000 提取，解出 13 个 cpio 条目）。
+注意不要用 Magisk patched boot 里那份 1,167,209 B 的 ramdisk（解出 21 个条目，
+含 .backup/.magisk、overlay.d、.backup/init.xz）——它需要 Magisk 的整套运行环境。
 路径是相对本脚本所在目录，CI 与本地都能跑。
 
 用法
