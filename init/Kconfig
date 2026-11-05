@@ -162,6 +162,17 @@ config LOCALVERSION_AUTO
 
 	  which is done within the script "scripts/setlocalversion".)
 
+config BOOT_WD
+	bool "Boot watchdog: panic when userspace never reaches zygote"
+	default n
+	help
+	  Starts a kthread at late_initcall that polls the process list once per
+	  second.  If no task named "zygote*" exists after 120 seconds it calls
+	  panic(), so the ramoops record area keeps a dmesg-ramoops-* entry
+	  (which the next boot does not overwrite) instead of leaving the device
+	  sitting at the boot logo with no way to read the kernel log.
+	  Diagnostic aid: say N for production kernels.
+
 config BUILD_SALT
        string "Build ID Salt"
        default ""

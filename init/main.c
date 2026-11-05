@@ -1498,3 +1498,48 @@ static noinline void __init kernel_init_freeable(void)
 
 	integrity_load_keys();
 }
+
+#ifdef CONFIG_BOOT_WD
+#include <linux/kthread.h>
+#include <linux/sched/signal.h>
+
+/*
+ * Boot watchdog: when userspace never reaches zygote the device just sits at
+ * the boot logo with no adb and no readable log (the bootloader passes
+ * loglevel=1 and the ramoops console ring is recycled on the next boot).
+ * Poll the process list once a second and panic after 120s, so ramoops keeps
+ * a dmesg-ramoops-* record (32 KB, untouched by the following boot).
+ */
+static int boot_wd_thread(void *unused)
+{
+	struct task_struct *p;
+	bool found;
+	int i;
+
+	for (i = 0; i < 120; i++) {
+		msleep(1000);
+		found = false;
+		rcu_read_lock();
+		for_each_process(p) {
+			if (!strncmp(p->comm, "zygote", 6)) {
+				found = true;
+				break;
+			}
+		}
+		rcu_read_unlock();
+		if (found) {
+			pr_info("boot_wd: zygote is up after %ds\n", i + 1);
+			return 0;
+		}
+	}
+	panic("boot_wd: no zygote after 120s, userspace is stuck");
+	return 0;
+}
+
+static int __init boot_wd_init(void)
+{
+	kthread_run(boot_wd_thread, NULL, "boot_wd");
+	return 0;
+}
+late_initcall(boot_wd_init);
+#endif
