@@ -1542,6 +1542,12 @@ static int boot_wd_dump(void)
 			break;
 	}
 	kernel_write(f, "\nBWD_END\n", 9, &pos);
+	/*
+	 * kernel_write() only dirties the page cache of a block device; without
+	 * an explicit flush the data is lost on the reset that follows.  This is
+	 * why the first blackbox attempt read back empty.
+	 */
+	vfs_fsync(f, 0);
 	filp_close(f, NULL);
 	pr_info("boot_wd: dumped %d lines to blackbox\n", n);
 	return n;
