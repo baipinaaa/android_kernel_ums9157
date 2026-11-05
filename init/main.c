@@ -1545,9 +1545,24 @@ static ssize_t bb_write(struct block_device *bdev, loff_t *ppos,
 	return done;
 }
 
-static struct block_device *bb_open(void)
+static struct block_device *bb_open_locked(int retry)
 {
-	return blkdev_get_by_dev(MKDEV(259, 41), FMODE_READ | FMODE_WRITE, NULL);
+	struct block_device *bdev;
+	int i;
+
+	for (i = 0; i < retry; i++) {
+		bdev = blkdev_get_by_dev(MKDEV(259, 41),
+					 FMODE_READ | FMODE_WRITE, NULL);
+		if (!IS_ERR(bdev))
+			return bdev;
+		/*
+		 * UFS is built in now, but probe is asynchronous; give the
+		 * partition a few seconds to show up.  Never sleep from the
+		 * panic notifier (retry == 1 there).
+		 */
+		msleep(500);
+	}
+	return bdev;
 }
 
 static int boot_wd_dump(void)
@@ -1559,7 +1574,7 @@ static int boot_wd_dump(void)
 	loff_t pos = 0;
 	int n = 0;
 
-	bdev = bb_open();
+	bdev = bb_open_locked(1);
 	if (IS_ERR(bdev)) {
 		pr_err("boot_wd: no blackbox bdev: %ld\n", PTR_ERR(bdev));
 		return -1;
@@ -1639,7 +1654,7 @@ static int __init boot_wd_test_write(void)
 	struct block_device *bdev;
 	loff_t pos = PAGE_SIZE;
 
-	bdev = bb_open();
+	bdev = bb_open_locked(20);
 	if (IS_ERR(bdev)) {
 		pr_err("boot_wd: test open failed: %ld\n", PTR_ERR(bdev));
 		return PTR_ERR(bdev);
