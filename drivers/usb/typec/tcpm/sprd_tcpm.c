@@ -5850,12 +5850,12 @@ static void *g_sprd_typec_device_ops;
 int sprd_tcpm_charger_ops_register(void *ops)
 {
 	if (!ops) {
-		pr_err("%s:line%d charger ops register failed\n", __func__, 90);
+		pr_err("%s:line%d charger ops register failed\n", __func__, __LINE__);
 		return -EINVAL;
 	}
 
 	g_sprd_charger_ops = ops;
-	pr_info("%s:line%d charger ops registered\n", __func__, 88);
+	pr_info("%s:line%d charger ops registered\n", __func__, __LINE__);
 	return 0;
 }
 EXPORT_SYMBOL_GPL(sprd_tcpm_charger_ops_register);
@@ -5863,12 +5863,12 @@ EXPORT_SYMBOL_GPL(sprd_tcpm_charger_ops_register);
 int sprd_tcpm_typec_device_ops_register(void *ops)
 {
 	if (!ops) {
-		pr_err("%s:line%d typec device ops register failed\n", __func__, 75);
+		pr_err("%s:line%d typec device ops register failed\n", __func__, __LINE__);
 		return -EINVAL;
 	}
 
 	g_sprd_typec_device_ops = ops;
-	pr_info("%s:line%d typec device ops registered\n", __func__, 73);
+	pr_info("%s:line%d typec device ops registered\n", __func__, __LINE__);
 	return 0;
 }
 EXPORT_SYMBOL_GPL(sprd_tcpm_typec_device_ops_register);
