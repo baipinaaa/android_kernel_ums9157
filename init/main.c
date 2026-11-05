@@ -1503,23 +1503,26 @@ static noinline void __init kernel_init_freeable(void)
 #ifdef CONFIG_BOOT_WD
 #include <linux/kthread.h>
 #include <linux/sched/signal.h>
-#include <linux/fs.h>
 #include <linux/kmsg_dump.h>
 #include <linux/notifier.h>
 #include <linux/blkdev.h>
 #include <linux/buffer_head.h>
 
 /*
- * Boot watchdog: when userspace dies (init exits 127 -> "Attempted to kill
- * init!") or never reaches zygote, the device just sits at the boot logo with
- * no adb and no readable log: the bootloader passes loglevel=1, and the
- * ramoops ring is wiped by the next boot, so "read pstore after flashing back
- * stock" never works.  Dump the kernel log into the "blackbox" partition
- * (mmcblk0p48, 512 MB, survives flashing) instead.  sysdumpdb already proved
- * the panic really is ours: "Attempted to kill init! exitcode=0x00007f00".
+ * Boot watchdog.  The device never reaches userspace on this build: sysdumpdb
+ * says 'Attempted to kill init! exitcode=0x00007f00', i.e. Android first-stage
+ * init exited 127 and androidboot.init_fatal_panic turned that into a panic.
+ * There is no way to read that log: the bootloader passes loglevel=1, and the
+ * ramoops ring is wiped by the next boot, so reading pstore after flashing
+ * back stock never works.  Dump the kernel log into the blackbox partition
+ * (mmcblk0p48, 512 MB, survives flashing) instead.
+ *
+ * /dev is a tmpfs mounted by init and its nodes come from ueventd, so
+ * filp_open("/dev/mmcblk0p48") fails when init dies early.  Open the block
+ * device by dev_t and write through __getblk()+sync_dirty_buffer().
  */
-static int bb_write_locked(struct block_device *bdev, loff_t *ppos,
-			   const char *buf, size_t len)
+static ssize_t bb_write(struct block_device *bdev, loff_t *ppos,
+			const char *buf, size_t len)
 {
 	size_t bsz = PAGE_SIZE;
 	size_t done = 0;
@@ -1542,6 +1545,11 @@ static int bb_write_locked(struct block_device *bdev, loff_t *ppos,
 	return done;
 }
 
+static struct block_device *bb_open(void)
+{
+	return blkdev_get_by_dev(MKDEV(259, 41), FMODE_READ | FMODE_WRITE, NULL);
+}
+
 static int boot_wd_dump(void)
 {
 	struct block_device *bdev;
@@ -1551,48 +1559,33 @@ static int boot_wd_dump(void)
 	loff_t pos = 0;
 	int n = 0;
 
-	/*
-	 * Do not use filp_open("/dev/mmcblk0p48"): /dev is a tmpfs mounted by
-	 * init and the nodes come from ueventd, so when init dies early the
-	 * path does not resolve (that is why the first two attempts left
-	 * blackbox empty).  Open the block device by dev_t instead:
-	 * blackbox = mmcblk0p48 = 259:41.
-	 */
-	bdev = blkdev_get_by_dev(MKDEV(259, 41), FMODE_READ | FMODE_WRITE,
-				 NULL);
+	bdev = bb_open();
 	if (IS_ERR(bdev)) {
-		pr_err("boot_wd: no blackbox bdev: %ld
-", PTR_ERR(bdev));
+		pr_err("boot_wd: no blackbox bdev: %ld\n", PTR_ERR(bdev));
 		return -1;
 	}
 	set_blocksize(bdev, PAGE_SIZE);
 
-	/* First pass: count lines and keep only the tail -- the init failure
-	 * is at the very end of the log. */
+	/* Keep only the tail: the init failure is at the very end. */
 	kmsg_dump_rewind(&dumper);
 	while (kmsg_dump_get_line(&dumper, false, line, sizeof(line), &len))
 		total++;
 	skip = total > 4096 ? total - 4096 : 0;
 
-	bb_write_locked(bdev, &pos, "BWD1
-", 5);
-
+	bb_write(bdev, &pos, "BWD1\n", 5);
 	kmsg_dump_rewind(&dumper);
 	while (kmsg_dump_get_line(&dumper, false, line, sizeof(line), &len)) {
 		if (skip) {
 			skip--;
 			continue;
 		}
-		if (bb_write_locked(bdev, &pos, line, len) != len)
+		if (bb_write(bdev, &pos, line, len) != (ssize_t)len)
 			break;
 		if (++n >= 4096)
 			break;
 	}
-	bb_write_locked(bdev, &pos, "
-BWD_END
-", 9);
-	pr_info("boot_wd: dumped %d/%d lines to blackbox
-", n, total);
+	bb_write(bdev, &pos, "\nBWD_END\n", 9);
+	pr_info("boot_wd: dumped %d/%d lines\n", n, total);
 	blkdev_put(bdev, FMODE_READ | FMODE_WRITE);
 	return n;
 }
@@ -1607,6 +1600,7 @@ static int boot_wd_panic_notify(struct notifier_block *nb,
 static struct notifier_block boot_wd_nb = {
 	.notifier_call = boot_wd_panic_notify,
 };
+
 static int boot_wd_thread(void *unused)
 {
 	struct task_struct *p;
@@ -1635,28 +1629,25 @@ static int boot_wd_thread(void *unused)
 }
 
 /*
- * Write a marker once from normal context, before init runs.  If BWD_TEST
- * shows up in blackbox but the panic dump does not, the block device path
- * is fine and the problem is the panic context (I/O cannot complete);
- * if the marker is missing too, 259:41 is wrong on this device.
+ * Marker written once from normal context before init runs.  If BWD_TEST is
+ * in blackbox but the panic dump is not, the block device path is fine and
+ * the panic context cannot complete the I/O; if both are missing, 259:41 is
+ * wrong on this device.
  */
 static int __init boot_wd_test_write(void)
 {
 	struct block_device *bdev;
 	loff_t pos = PAGE_SIZE;
 
-	bdev = blkdev_get_by_dev(MKDEV(259, 41), FMODE_READ | FMODE_WRITE, NULL);
+	bdev = bb_open();
 	if (IS_ERR(bdev)) {
-		pr_err("boot_wd: test open failed: %ld
-", PTR_ERR(bdev));
+		pr_err("boot_wd: test open failed: %ld\n", PTR_ERR(bdev));
 		return PTR_ERR(bdev);
 	}
 	set_blocksize(bdev, PAGE_SIZE);
-	bb_write_locked(bdev, &pos, "BWD_TEST
-", 9);
+	bb_write(bdev, &pos, "BWD_TEST\n", 9);
 	blkdev_put(bdev, FMODE_READ | FMODE_WRITE);
-	pr_info("boot_wd: test marker written
-");
+	pr_info("boot_wd: test marker written\n");
 	return 0;
 }
 late_initcall(boot_wd_test_write);
