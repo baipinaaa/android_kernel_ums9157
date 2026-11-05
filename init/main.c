@@ -1503,14 +1503,60 @@ static noinline void __init kernel_init_freeable(void)
 #ifdef CONFIG_BOOT_WD
 #include <linux/kthread.h>
 #include <linux/sched/signal.h>
+#include <linux/fs.h>
+#include <linux/kmsg_dump.h>
+#include <linux/notifier.h>
 
 /*
- * Boot watchdog: when userspace never reaches zygote the device just sits at
- * the boot logo with no adb and no readable log (the bootloader passes
- * loglevel=1 and the ramoops console ring is recycled on the next boot).
- * Poll the process list once a second and panic after 120s, so ramoops keeps
- * a dmesg-ramoops-* record (32 KB, untouched by the following boot).
+ * Boot watchdog: when userspace dies (init exits 127 -> "Attempted to kill
+ * init!") or never reaches zygote, the device just sits at the boot logo with
+ * no adb and no readable log: the bootloader passes loglevel=1, and the
+ * ramoops ring is wiped by the next boot, so "read pstore after flashing back
+ * stock" never works.  Dump the kernel log into the "blackbox" partition
+ * (mmcblk0p48, 512 MB, survives flashing) instead.  sysdumpdb already proved
+ * the panic really is ours: "Attempted to kill init! exitcode=0x00007f00".
  */
+static int boot_wd_dump(void)
+{
+	struct file *f;
+	loff_t pos = 0;
+	struct kmsg_dumper dumper = { };
+	char line[1024];
+	size_t len;
+	int n = 0;
+
+	f = filp_open("/dev/mmcblk0p48", O_WRONLY | O_LARGEFILE, 0);
+	if (IS_ERR(f))
+		f = filp_open("/dev/block/by-name/blackbox",
+			       O_WRONLY | O_LARGEFILE, 0);
+	if (IS_ERR(f)) {
+		pr_err("boot_wd: cannot open blackbox: %ld\n", PTR_ERR(f));
+		return -1;
+	}
+	kernel_write(f, "BWD1\n", 5, &pos);
+	kmsg_dump_rewind(&dumper);
+	while (kmsg_dump_get_line(&dumper, false, line, sizeof(line), &len)) {
+		if (kernel_write(f, line, len, &pos) != len)
+			break;
+		if (++n >= 20000 || pos >= 4 * 1024 * 1024)
+			break;
+	}
+	kernel_write(f, "\nBWD_END\n", 9, &pos);
+	filp_close(f, NULL);
+	pr_info("boot_wd: dumped %d lines to blackbox\n", n);
+	return n;
+}
+
+static int boot_wd_panic_notify(struct notifier_block *nb,
+				unsigned long val, void *v)
+{
+	boot_wd_dump();
+	return NOTIFY_DONE;
+}
+
+static struct notifier_block boot_wd_nb = {
+	.notifier_call = boot_wd_panic_notify,
+};
 static int boot_wd_thread(void *unused)
 {
 	struct task_struct *p;
@@ -1530,31 +1576,17 @@ static int boot_wd_thread(void *unused)
 		rcu_read_unlock();
 		if (found) {
 			pr_info("boot_wd: zygote is up after %ds\n", i + 1);
-			return 0;
+			break;
 		}
 	}
-	panic("boot_wd: no zygote after 120s, userspace is stuck");
+	/* Always dump: zygote up still means display/USB may be dead. */
+	boot_wd_dump();
 	return 0;
-}
-
-static struct timer_list boot_wd_timer;
-
-/*
- * The kthread above may never run if userspace deadlocks a CPU or leaves
- * interrupts in a bad state.  The timer fires from softirq context, so it
- * still gets a chance even when no task can be scheduled.  Forcing the
- * panic unconditionally is intentional: this build exists only to capture
- * one boot log into ramoops, and the log is worth more than a working boot.
- */
-static void boot_wd_panic(struct timer_list *t)
-{
-	panic("boot_wd: 90s after late_initcall, forcing panic to capture the log");
 }
 
 static int __init boot_wd_init(void)
 {
-	timer_setup(&boot_wd_timer, boot_wd_panic, 0);
-	mod_timer(&boot_wd_timer, jiffies + 90 * HZ);
+	atomic_notifier_chain_register(&panic_notifier_list, &boot_wd_nb);
 	kthread_run(boot_wd_thread, NULL, "boot_wd");
 	return 0;
 }
