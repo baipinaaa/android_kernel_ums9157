@@ -1,9 +1,5 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
-/*
- * arch/arm64/include/asm/cpucaps.h
- *
- * Copyright (C) 2016 ARM Ltd.
- */
+
 #ifndef __ASM_CPUCAPS_H
 #define __ASM_CPUCAPS_H
 
@@ -57,10 +53,8 @@
 #define ARM64_WORKAROUND_1542419		47
 #define ARM64_HAS_AMU_EXTN			48
 #define ARM64_SPECTRE_BHB			49
-#define ARM64_WORKAROUND_1742098		50
-#define ARM64_WORKAROUND_SPECULATIVE_SSBS	51
 
-/* kabi: reserve 52 - 62 for future cpu capabilities */
+
 #define ARM64_NCAPS				62
 
-#endif /* __ASM_CPUCAPS_H */
+#endif 
