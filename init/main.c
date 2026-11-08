@@ -1686,39 +1686,7 @@ static int bb_dump(struct block_device *bdev, const char *tag, loff_t start)
 	return n;
 }
 
-/* Copy whatever the previous boot left in ramoops into misc. */
-static void bb_dump_pstore(struct block_device *bdev, loff_t *pos)
-{
-	static const char *const names[] = {
-		"/sys/fs/pstore/dmesg-ramoops-0",
-		"/sys/fs/pstore/console-ramoops-0",
-		"/sys/fs/pstore/pmsg-ramoops-0",
-	};
-	char buf[4096];
-	mm_segment_t old;
-	int i;
 
-	old = get_fs();
-	set_fs(KERNEL_DS);
-	for (i = 0; i < ARRAY_SIZE(names); i++) {
-		struct file *f;
-		loff_t off = 0;
-		ssize_t n;
-
-		f = filp_open(names[i], O_RDONLY, 0);
-		if (IS_ERR(f))
-			continue;
-		bb_write(bdev, pos, "BWD_PSTORE ", 11);
-		bb_write(bdev, pos, names[i], strlen(names[i]));
-		bb_write(bdev, pos, "\n", 1);
-		while ((n = kernel_read(f, buf, sizeof(buf), &off)) > 0)
-			if (bb_write(bdev, pos, buf, n) != n)
-				break;
-		bb_write(bdev, pos, "\nBWD_PSTORE_END\n", 15);
-		filp_close(f, NULL);
-	}
-	set_fs(old);
-}
 
 static int boot_wd_panic_notify(struct notifier_block *nb,
 				unsigned long val, void *v)
@@ -1736,14 +1704,34 @@ static struct notifier_block boot_wd_nb = {
 	.notifier_call = boot_wd_panic_notify,
 };
 
+/*
+ * Everything runs from this thread, NEVER from late_initcall directly:
+ * blkdev_get_by_* can block on an UFS that is still probing, and doing that
+ * synchronously in late_initcall wedges the kernel before do_initcalls()
+ * returns.  That was the whole reason 5b63c30f6/aab1eb971 never reached
+ * kernel_init.  By 2s devtmpfs is mounted and the misc node exists.
+ */
 static int boot_wd_thread(void *unused)
 {
 	struct task_struct *p;
 	bool found;
 	int i;
 
-	for (i = 0; i < 120; i++) {
+	for (i = 0; i < 130; i++) {
 		msleep(1000);
+
+		if (!bb_dev && i >= 1) {
+			bb_dev = bb_open_locked(1);
+			if (IS_ERR(bb_dev)) {
+				bb_dev = NULL;
+			} else {
+				set_blocksize(bb_dev, PAGE_SIZE);
+				pr_info("boot_wd: misc open\n");
+			}
+		}
+		if (bb_dev && (i == 1 || i % 10 == 1))
+			bb_dump(bb_dev, "BWD_KT\n", BB_START);
+
 		found = false;
 		rcu_read_lock();
 		for_each_process(p) {
@@ -1762,32 +1750,6 @@ static int boot_wd_thread(void *unused)
 	bb_dump(bb_dev, "BWD_LATE\n", BB_START);
 	return 0;
 }
-
-/*
- * Open blackbox once from normal context and keep the handle.  Two reasons:
- * devtmpfs gives us /dev/mmcblk0p48 without hardcoding a dynamic major, and
- * the panic notifier must never call blkdev_get_by_* (it sleeps).  Dump what
- * we have at this point too, so even a panic-context write failure leaves a
- * record of everything up to late_initcall.
- */
-static int __init boot_wd_early(void)
-{
-	loff_t pos = BB_START;
-
-	bb_dev = bb_open_locked(20);
-	if (IS_ERR(bb_dev)) {
-		pr_err("boot_wd: open blackbox failed: %ld\n", PTR_ERR(bb_dev));
-		bb_dev = NULL;
-		return 0;
-	}
-	set_blocksize(bb_dev, PAGE_SIZE);
-	pr_info("boot_wd: misc open, dumping early log\n");
-	pr_info("boot_wd: early dump %d lines\n",
-		bb_dump(bb_dev, "BWD_EARLY\n", BB_START));
-	bb_dump_pstore(bb_dev, &pos);
-	return 0;
-}
-late_initcall(boot_wd_early);
 
 static int __init boot_wd_init(void)
 {
