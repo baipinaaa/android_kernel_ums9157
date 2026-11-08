@@ -25,7 +25,15 @@ jobs:
           sudo apt-get install -y -qq bc bison flex libssl-dev libelf-dev \
             gcc-aarch64-linux-gnu binutils-aarch64-linux-gnu
 
+      - name: 缓存 Android clang 12.0.5 (r416183b)
+        id: clang-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/clang-r416183b
+          key: android-clang-r416183b-v1
+
       - name: 下载 Android clang 12.0.5 (r416183b)
+        if: steps.clang-cache.outputs.cache-hit != 'true'
         run: |
           set -euo pipefail
           # 设备内核就是这个工具链编的：CONFIG_CC_VERSION_TEXT="Android (7284624, based on
@@ -37,6 +45,10 @@ jobs:
           curl -fL --retry 3 --retry-delay 5 --connect-timeout 30 -o /tmp/clang.tgz "$URL"
           ls -l /tmp/clang.tgz
           tar -xzf /tmp/clang.tgz -C "$HOME/clang-r416183b"
+
+      - name: 启用 clang 12.0.5
+        run: |
+          set -euo pipefail
           echo "$HOME/clang-r416183b/bin" >> "$GITHUB_PATH"
           echo "LD_LIBRARY_PATH=$HOME/clang-r416183b/lib64:$HOME/clang-r416183b/lib" >> "$GITHUB_ENV"
           export PATH="$HOME/clang-r416183b/bin:$PATH"
@@ -44,7 +56,7 @@ jobs:
           echo "--- clang:";    clang --version | head -1
           echo "--- lld:";      ld.lld --version | head -1
           echo "--- llvm-ar:";  llvm-ar --version | head -1
-          clang --version | head -1 | grep -q 'clang version 12\.0\.5' || { echo 'ERROR: 不是 Android clang 12.0.5'; exit 1; }
+          clang --version | head -1 | grep -q 'clang version 12\.0\.5' || { echo 'ERROR: 不是 Android clang 12.0.5（缓存可能损坏，删掉 cache 重试）'; exit 1; }
 
       - name: 加 swap（LTO+CFI 编译很吃内存）
         continue-on-error: true
