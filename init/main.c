@@ -1572,6 +1572,7 @@ static noinline void __init kernel_init_freeable(void)
 #include <linux/notifier.h>
 #include <linux/blkdev.h>
 #include <linux/buffer_head.h>
+#include <linux/uaccess.h>
 
 /*
  * Boot watchdog.  The device never reaches userspace on this build: sysdumpdb
@@ -1612,23 +1613,33 @@ static ssize_t bb_write(struct block_device *bdev, loff_t *ppos,
 
 static struct block_device *bb_dev;
 
+/*
+ * blackbox lives on the second UFS LUN and gets a dynamic block major
+ * (259:41 on the stock kernel).  misc lives on the first LUN, whose major is
+ * the fixed MMC_BLOCK_MAJOR 179, so it is the one partition that can be
+ * opened with a stable dev_t no matter how probe order changes.  Write at
+ * 0x60000: Android only uses the first few KB of misc for boot reasons.
+ */
+#define BB_MISC_PATH "/dev/mmcblk0p3"
+#define BB_BOX_PATH "/dev/mmcblk0p48"
+#define BB_START 0x60000
+
 static struct block_device *bb_open_locked(int retry)
 {
 	struct block_device *bdev;
 	int i;
 
 	for (i = 0; i < retry; i++) {
-		/*
-		 * devtmpfs is on and UFS is built in, so the node exists by
-		 * name.  This also survives a dynamic major reassignment that
-		 * would silently make a hardcoded 259:41 point at nothing.
-		 */
-		bdev = blkdev_get_by_path("/dev/mmcblk0p48",
+		bdev = blkdev_get_by_path(BB_MISC_PATH,
 					  FMODE_READ | FMODE_WRITE, NULL);
 		if (!IS_ERR(bdev))
 			return bdev;
-		bdev = blkdev_get_by_dev(MKDEV(259, 41),
+		bdev = blkdev_get_by_dev(MKDEV(179, 3),
 					 FMODE_READ | FMODE_WRITE, NULL);
+		if (!IS_ERR(bdev))
+			return bdev;
+		bdev = blkdev_get_by_path(BB_BOX_PATH,
+					  FMODE_READ | FMODE_WRITE, NULL);
 		if (!IS_ERR(bdev))
 			return bdev;
 		if (retry == 1)
@@ -1642,22 +1653,22 @@ static struct block_device *bb_open_locked(int retry)
 	return bdev;
 }
 
-static int bb_dump(struct block_device *bdev, const char *tag)
+static int bb_dump(struct block_device *bdev, const char *tag, loff_t start)
 {
 	struct kmsg_dumper dumper = { };
 	char line[1024];
 	size_t len, total = 0, skip;
-	loff_t pos = 0;
+	loff_t pos = start;
 	int n = 0;
 
 	if (!bdev || IS_ERR(bdev))
 		return -1;
 
-	/* Keep only the tail: the init failure is at the very end. */
+	/* Only 640 KB of misc is ours; keep the tail, that is where init is. */
 	kmsg_dump_rewind(&dumper);
 	while (kmsg_dump_get_line(&dumper, false, line, sizeof(line), &len))
 		total++;
-	skip = total > 4096 ? total - 4096 : 0;
+	skip = total > 600 ? total - 600 : 0;
 
 	bb_write(bdev, &pos, tag, strlen(tag));
 	kmsg_dump_rewind(&dumper);
@@ -1668,11 +1679,45 @@ static int bb_dump(struct block_device *bdev, const char *tag)
 		}
 		if (bb_write(bdev, &pos, line, len) != (ssize_t)len)
 			break;
-		if (++n >= 4096)
+		if (++n >= 600)
 			break;
 	}
 	bb_write(bdev, &pos, "\nBWD_END\n", 9);
 	return n;
+}
+
+/* Copy whatever the previous boot left in ramoops into misc. */
+static void bb_dump_pstore(struct block_device *bdev, loff_t *pos)
+{
+	static const char *const names[] = {
+		"/sys/fs/pstore/dmesg-ramoops-0",
+		"/sys/fs/pstore/console-ramoops-0",
+		"/sys/fs/pstore/pmsg-ramoops-0",
+	};
+	char buf[4096];
+	mm_segment_t old;
+	int i;
+
+	old = get_fs();
+	set_fs(KERNEL_DS);
+	for (i = 0; i < ARRAY_SIZE(names); i++) {
+		struct file *f;
+		loff_t off = 0;
+		ssize_t n;
+
+		f = filp_open(names[i], O_RDONLY, 0);
+		if (IS_ERR(f))
+			continue;
+		bb_write(bdev, pos, "BWD_PSTORE ", 11);
+		bb_write(bdev, pos, names[i], strlen(names[i]));
+		bb_write(bdev, pos, "\n", 1);
+		while ((n = kernel_read(f, buf, sizeof(buf), &off)) > 0)
+			if (bb_write(bdev, pos, buf, n) != n)
+				break;
+		bb_write(bdev, pos, "\nBWD_PSTORE_END\n", 15);
+		filp_close(f, NULL);
+	}
+	set_fs(old);
 }
 
 static int boot_wd_panic_notify(struct notifier_block *nb,
@@ -1683,7 +1728,7 @@ static int boot_wd_panic_notify(struct notifier_block *nb,
 		if (IS_ERR(bb_dev))
 			bb_dev = NULL;
 	}
-	bb_dump(bb_dev, "BWD_PANIC\n");
+	bb_dump(bb_dev, "BWD_PANIC\n", BB_START);
 	return NOTIFY_DONE;
 }
 
@@ -1714,7 +1759,7 @@ static int boot_wd_thread(void *unused)
 		}
 	}
 	/* Always dump: zygote up still means display/USB may be dead. */
-	bb_dump(bb_dev, "BWD_LATE\n");
+	bb_dump(bb_dev, "BWD_LATE\n", BB_START);
 	return 0;
 }
 
@@ -1727,6 +1772,8 @@ static int boot_wd_thread(void *unused)
  */
 static int __init boot_wd_early(void)
 {
+	loff_t pos = BB_START;
+
 	bb_dev = bb_open_locked(20);
 	if (IS_ERR(bb_dev)) {
 		pr_err("boot_wd: open blackbox failed: %ld\n", PTR_ERR(bb_dev));
@@ -1734,8 +1781,10 @@ static int __init boot_wd_early(void)
 		return 0;
 	}
 	set_blocksize(bb_dev, PAGE_SIZE);
-	pr_info("boot_wd: blackbox open, dumping early log\n");
-	pr_info("boot_wd: early dump %d lines\n", bb_dump(bb_dev, "BWD_EARLY\n"));
+	pr_info("boot_wd: misc open, dumping early log\n");
+	pr_info("boot_wd: early dump %d lines\n",
+		bb_dump(bb_dev, "BWD_EARLY\n", BB_START));
+	bb_dump_pstore(bb_dev, &pos);
 	return 0;
 }
 late_initcall(boot_wd_early);
