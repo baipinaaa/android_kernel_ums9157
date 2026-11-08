@@ -218,9 +218,6 @@ extern void scheduler_tick(void);
 
 #define	MAX_SCHEDULE_TIMEOUT		LONG_MAX
 
-#ifdef CONFIG_SPRD_CORE_CTL
-extern int ctrl_core_api(struct cpumask *target, int type);
-#endif
 extern long schedule_timeout(long timeout);
 extern long schedule_timeout_interruptible(long timeout);
 extern long schedule_timeout_killable(long timeout);
@@ -348,19 +345,11 @@ struct load_weight {
  * Only for tasks we track a moving average of the past instantaneous
  * estimated utilization. This allows to absorb sporadic drops in utilization
  * of an otherwise almost periodic task.
- *
- * The UTIL_AVG_UNCHANGED flag is used to synchronize util_est with util_avg
- * updates. When a task is dequeued, its util_est should not be updated if its
- * util_avg has not been updated in the meantime.
- * This information is mapped into the MSB bit of util_est.enqueued at dequeue
- * time. Since max value of util_est.enqueued for a task is 1024 (PELT util_avg
- * for a task) it is safe to use MSB.
  */
 struct util_est {
 	unsigned int			enqueued;
 	unsigned int			ewma;
-#define UTIL_EST_WEIGHT_SHIFT		5
-#define UTIL_AVG_UNCHANGED		0x80000000
+#define UTIL_EST_WEIGHT_SHIFT		2
 } __attribute__((__aligned__(sizeof(u64))));
 
 /*
@@ -1309,8 +1298,7 @@ struct task_struct {
 	unsigned long			prev_lowest_stack;
 #endif
 
-	_ANDROID_KABI_REPLACE(ANDROID_VENDOR_DATA_ARRAY(1, 2), struct{ u64 last_enqueue_ts; u64 last_sleep_ts; });
-
+	ANDROID_VENDOR_DATA_ARRAY(1, 2);
 	ANDROID_OEM_DATA_ARRAY(1, 3);
 
 	ANDROID_KABI_RESERVE(1);
@@ -1524,9 +1512,6 @@ extern struct pid *cad_pid;
 #define PF_MEMALLOC_NOCMA	0x10000000	/* All allocation request will have _GFP_MOVABLE cleared */
 #define PF_FREEZER_SKIP		0x40000000	/* Freezer should not count it as freezable */
 #define PF_SUSPEND_TASK		0x80000000      /* This thread called freeze_processes() and should not be frozen */
-/**** ZSW_ADD FOR CPUFREEZER begin ****/
-#define PF_BINDER_NOFREEZE	0x20000000	/* do not freeze the task for binder call */
-/**** ZSW_ADD FOR CPUFREEZER end ****/
 
 /*
  * Only the _current_ task can read/write to tsk->flags, but other

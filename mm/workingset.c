@@ -213,35 +213,6 @@ static void unpack_shadow(void *shadow, int *memcgidp, pg_data_t **pgdat,
 	*workingsetp = workingset;
 }
 
-#ifdef CONFIG_LRU_BALANCE_BASE_THRASHING
-/**
- * workingset_age_nonresident - age non-resident entries as LRU ages
- * @memcg: the lruvec that was aged
- * @nr_pages: the number of pages to count
- *
- * As in-memory pages are aged, non-resident pages need to be aged as
- * well, in order for the refault distances later on to be comparable
- * to the in-memory dimensions. This function allows reclaim and LRU
- * operations to drive the non-resident aging along in parallel.
- */
-void workingset_age_nonresident(struct lruvec *lruvec, unsigned long nr_pages)
-{
-	/*
-	 * Reclaiming a cgroup means reclaiming all its children in a
-	 * round-robin fashion. That means that each cgroup has an LRU
-	 * order that is composed of the LRU orders of its child
-	 * cgroups; and every page has an LRU position not just in the
-	 * cgroup that owns it, but in all of that group's ancestors.
-	 *
-	 * So when the physical inactive list of a leaf cgroup ages,
-	 * the virtual inactive lists of all its parents, including
-	 * the root cgroup's, age as well.
-	 */
-	do {
-		atomic_long_add(nr_pages, &lruvec->nonresident_age);
-	} while ((lruvec = parent_lruvec(lruvec)));
-}
-#endif
 /**
  * workingset_eviction - note the eviction of a page from memory
  * @page: the page being evicted
@@ -263,13 +234,7 @@ void *workingset_eviction(struct page *page)
 	VM_BUG_ON_PAGE(!PageLocked(page), page);
 
 	lruvec = mem_cgroup_lruvec(pgdat, memcg);
-#ifdef CONFIG_LRU_BALANCE_BASE_THRASHING
-	workingset_age_nonresident(lruvec, hpage_nr_pages(page));
-	/* XXX: target_memcg can be NULL, go through lruvec */
-	eviction = atomic_long_read(&lruvec->nonresident_age);
-#else
 	eviction = atomic_long_inc_return(&lruvec->inactive_age);
-#endif
 	return pack_shadow(memcgid, pgdat, eviction, PageWorkingset(page));
 }
 
@@ -285,11 +250,7 @@ void workingset_refault(struct page *page, void *shadow)
 {
 	unsigned long refault_distance;
 	struct pglist_data *pgdat;
-#ifdef CONFIG_LRU_BALANCE_BASE_THRASHING
-	unsigned long workingset_size;
-#else
 	unsigned long active_file;
-#endif
 	struct mem_cgroup *memcg;
 	unsigned long eviction;
 	struct lruvec *lruvec;
@@ -320,12 +281,8 @@ void workingset_refault(struct page *page, void *shadow)
 	if (!mem_cgroup_disabled() && !memcg)
 		goto out;
 	lruvec = mem_cgroup_lruvec(pgdat, memcg);
-#ifdef CONFIG_LRU_BALANCE_BASE_THRASHING
-	refault = atomic_long_read(&lruvec->nonresident_age);
-#else
 	refault = atomic_long_read(&lruvec->inactive_age);
 	active_file = lruvec_lru_size(lruvec, LRU_ACTIVE_FILE, MAX_NR_ZONES);
-#endif
 
 	/*
 	 * Calculate the refault distance
@@ -349,41 +306,19 @@ void workingset_refault(struct page *page, void *shadow)
 
 	/*
 	 * Compare the distance to the existing workingset size. We
-	 * don't activate pages that couldn't stay resident even if
-	 * all the memory was available to the page cache. Whether
-	 * cache can compete with anon or not depends on having swap.
+	 * don't act on pages that couldn't stay resident even if all
+	 * the memory was available to the page cache.
 	 */
-#ifdef CONFIG_LRU_BALANCE_BASE_THRASHING
-	workingset_size = lruvec_page_state(lruvec, NR_ACTIVE_FILE);
-	if (mem_cgroup_get_nr_swap_pages(memcg) > 0) {
-		workingset_size += lruvec_page_state(lruvec,
-						     NR_INACTIVE_ANON);
-		workingset_size += lruvec_page_state(lruvec,
-						     NR_ACTIVE_ANON);
-	}
-	if (refault_distance > workingset_size)
-		goto out;
-
-	SetPageActive(page);
-	workingset_age_nonresident(lruvec, hpage_nr_pages(page));
-#else
 	if (refault_distance > active_file)
 		goto out;
 
 	SetPageActive(page);
 	atomic_long_inc(&lruvec->inactive_age);
-#endif
 	inc_lruvec_state(lruvec, WORKINGSET_ACTIVATE);
 
 	/* Page was active prior to eviction */
 	if (workingset) {
 		SetPageWorkingset(page);
-#ifdef CONFIG_LRU_BALANCE_BASE_THRASHING
-		/* XXX: Move to lru_cache_add() when it supports new vs putback */
-		spin_lock_irq(&page_pgdat(page)->lru_lock);
-		lru_note_cost_page(page);
-		spin_unlock_irq(&page_pgdat(page)->lru_lock);
-#endif
 		inc_lruvec_state(lruvec, WORKINGSET_RESTORE);
 	}
 out:
@@ -411,11 +346,7 @@ void workingset_activation(struct page *page)
 	if (!mem_cgroup_disabled() && !memcg)
 		goto out;
 	lruvec = mem_cgroup_lruvec(page_pgdat(page), memcg);
-#ifdef CONFIG_LRU_BALANCE_BASE_THRASHING
-	workingset_age_nonresident(lruvec, hpage_nr_pages(page));
-#else
 	atomic_long_inc(&lruvec->inactive_age);
-#endif
 out:
 	rcu_read_unlock();
 }

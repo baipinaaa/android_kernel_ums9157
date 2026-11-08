@@ -880,25 +880,7 @@ struct sk_buff {
 	__u32			headers_end[0];
 	/* public: */
 
-	/* Android KABI preservation.
-	 *
-	 * "open coded" version of ANDROID_KABI_USE() to pack more
-	 * fields/variables into the space that we have.
-	 *
-	 * scm_io_uring is from 04df9719df18 ("io_uring/af_unix: defer
-	 * registered files gc to io_uring release")
-	 */
-	/* NOTE: due to these fields ending up after headers_end, we have to
-	 * manually copy them in the __copy_skb_header() call in skbuf.c.  Be
-	 * very aware of that if you change these fields.
-	 */
-	_ANDROID_KABI_REPLACE(_ANDROID_KABI_RESERVE(1),
-			 struct {
-				__u8 scm_io_uring:1;
-				__u8 android_kabi_reserved1_padding1;
-				__u16 android_kabi_reserved1_padding2;
-				__u32 android_kabi_reserved1_padding3;
-				});
+	ANDROID_KABI_RESERVE(1);
 	ANDROID_KABI_RESERVE(2);
 
 	/* These elements must be at the end, see alloc_skb() for details.  */
@@ -1642,22 +1624,6 @@ static inline int skb_unclone(struct sk_buff *skb, gfp_t pri)
 	if (skb_cloned(skb))
 		return pskb_expand_head(skb, 0, 0, pri);
 
-	return 0;
-}
-
-/* This variant of skb_unclone() makes sure skb->truesize is not changed */
-static inline int skb_unclone_keeptruesize(struct sk_buff *skb, gfp_t pri)
-{
-	might_sleep_if(gfpflags_allow_blocking(pri));
-
-	if (skb_cloned(skb)) {
-		unsigned int save = skb->truesize;
-		int res;
-
-		res = pskb_expand_head(skb, 0, 0, pri);
-		skb->truesize = save;
-		return res;
-	}
 	return 0;
 }
 

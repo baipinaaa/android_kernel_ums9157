@@ -7,10 +7,6 @@
 #include "zdata.h"
 #include "compress.h"
 #include <linux/prefetch.h>
-#include <linux/cpuhotplug.h>
-#include <linux/rcupdate.h>
-#include <linux/sched.h>
-#include <uapi/linux/sched/types.h>
 
 #include <trace/events/erofs.h>
 
@@ -38,21 +34,25 @@ typedef tagptr1_t compressed_page_t;
 static struct workqueue_struct *z_erofs_workqueue __read_mostly;
 static struct kmem_cache *pcluster_cachep __read_mostly;
 
-#ifdef CONFIG_EROFS_FS_PCPU_KTHREAD
-/*
- * Per-CPU decompression workers.
- *
- * The device kernel (UMS9157) gave every CPU its own kthread_worker and kept
- * the global workqueue only as a fallback for CPUs whose worker could not be
- * created.  z_erofs_pcpu_workers[] is written under z_erofs_pcpu_worker_lock
- * and read locklessly from z_erofs_vle_unzip_kickoff() inside an RCU read
- * section, so erofs_cpu_offline() has to wait for a grace period before it
- * destroys the worker it just detached.
- */
-static struct kthread_worker **z_erofs_pcpu_workers __read_mostly;
-static DEFINE_SPINLOCK(z_erofs_pcpu_worker_lock);
-static int erofs_cpuhp_state __read_mostly;
-#endif
+void z_erofs_exit_zip_subsystem(void)
+{
+	destroy_workqueue(z_erofs_workqueue);
+	kmem_cache_destroy(pcluster_cachep);
+}
+
+static inline int z_erofs_init_workqueue(void)
+{
+	const unsigned int onlinecpus = num_possible_cpus();
+	const unsigned int flags = WQ_UNBOUND | WQ_HIGHPRI | WQ_CPU_INTENSIVE;
+
+	/*
+	 * no need to spawn too many threads, limiting threads could minimum
+	 * scheduling overhead, perhaps per-CPU threads should be better?
+	 */
+	z_erofs_workqueue = alloc_workqueue("erofs_unzipd", flags,
+					    onlinecpus + onlinecpus / 4);
+	return z_erofs_workqueue ? 0 : -ENOMEM;
+}
 
 static void z_erofs_pcluster_init_once(void *ptr)
 {
@@ -77,152 +77,19 @@ static void z_erofs_pcluster_init_always(struct z_erofs_pcluster *pcl)
 	DBG_BUGON(cl->vcnt);
 }
 
-#ifdef CONFIG_EROFS_FS_PCPU_KTHREAD
-static int erofs_cpu_online(unsigned int cpu)
-{
-	struct kthread_worker *worker;
-
-	worker = kthread_create_worker_on_cpu(cpu, 0, "erofs_worker/%u", cpu);
-	if (IS_ERR(worker))
-		return PTR_ERR(worker);
-
-	if (IS_ENABLED(CONFIG_EROFS_FS_PCPU_KTHREAD_HIPRI)) {
-		struct sched_param sp = { .sched_priority = 1 };
-
-		BUG_ON(sched_setscheduler_nocheck(worker->task,
-						  SCHED_FIFO, &sp));
-	}
-
-	spin_lock(&z_erofs_pcpu_worker_lock);
-	if (z_erofs_pcpu_workers[cpu]) {
-		/* the boot path already created one for this CPU */
-		spin_unlock(&z_erofs_pcpu_worker_lock);
-		kthread_destroy_worker(worker);
-	} else {
-		z_erofs_pcpu_workers[cpu] = worker;
-		spin_unlock(&z_erofs_pcpu_worker_lock);
-	}
-	return 0;
-}
-
-static int erofs_cpu_offline(unsigned int cpu)
-{
-	struct kthread_worker *worker;
-
-	spin_lock(&z_erofs_pcpu_worker_lock);
-	worker = z_erofs_pcpu_workers[cpu];
-	z_erofs_pcpu_workers[cpu] = NULL;
-	spin_unlock(&z_erofs_pcpu_worker_lock);
-
-	/*
-	 * kickoff() only takes rcu_read_lock() around the array dereference, so
-	 * a concurrent reader may still be holding the pointer we just cleared.
-	 */
-	synchronize_rcu();
-	if (worker)
-		kthread_destroy_worker(worker);
-	return 0;
-}
-#endif
-
 int __init z_erofs_init_zip_subsystem(void)
 {
-	int err;
-#ifdef CONFIG_EROFS_FS_PCPU_KTHREAD
-	int cpu;
-#endif
-
 	pcluster_cachep = kmem_cache_create("erofs_compress",
 					    Z_EROFS_WORKGROUP_SIZE, 0,
 					    SLAB_RECLAIM_ACCOUNT,
 					    z_erofs_pcluster_init_once);
-	if (!pcluster_cachep)
-		return -ENOMEM;
+	if (pcluster_cachep) {
+		if (!z_erofs_init_workqueue())
+			return 0;
 
-	/*
-	 * No WQ_CPU_INTENSIVE and a plain per-CPU thread count any more: with
-	 * per-CPU kthreads in place this queue is just a fallback.
-	 */
-	z_erofs_workqueue = alloc_workqueue("erofs_worker",
-					    WQ_UNBOUND | WQ_HIGHPRI,
-					    num_possible_cpus());
-	if (!z_erofs_workqueue) {
-		err = -ENOMEM;
-		goto err_destroy_cache;
+		kmem_cache_destroy(pcluster_cachep);
 	}
-
-#ifdef CONFIG_EROFS_FS_PCPU_KTHREAD
-	z_erofs_pcpu_workers = kcalloc(num_possible_cpus(),
-				       sizeof(struct kthread_worker *),
-				       GFP_ATOMIC);
-	if (!z_erofs_pcpu_workers) {
-		err = -ENOMEM;
-		goto err_destroy_wq;
-	}
-
-	for_each_online_cpu(cpu) {
-		struct kthread_worker *worker;
-
-		worker = kthread_create_worker_on_cpu(cpu, 0,
-						      "erofs_worker/%u", cpu);
-		if (IS_ERR(worker))
-			continue;
-		if (IS_ENABLED(CONFIG_EROFS_FS_PCPU_KTHREAD_HIPRI)) {
-			struct sched_param sp = { .sched_priority = 1 };
-
-			BUG_ON(sched_setscheduler_nocheck(worker->task,
-							  SCHED_FIFO, &sp));
-		}
-		z_erofs_pcpu_workers[cpu] = worker;
-	}
-
-	erofs_cpuhp_state = cpuhp_setup_state_nocalls(CPUHP_AP_ONLINE_DYN,
-						      "fs/erofs:online",
-						      erofs_cpu_online,
-						      erofs_cpu_offline);
-	if (erofs_cpuhp_state < 0) {
-		err = erofs_cpuhp_state;
-		for_each_possible_cpu(cpu) {
-			struct kthread_worker *worker =
-				z_erofs_pcpu_workers[cpu];
-
-			z_erofs_pcpu_workers[cpu] = NULL;
-			if (worker)
-				kthread_destroy_worker(worker);
-		}
-		kfree(z_erofs_pcpu_workers);
-		goto err_destroy_wq;
-	}
-#endif
-	return 0;
-
-#ifdef CONFIG_EROFS_FS_PCPU_KTHREAD
-err_destroy_wq:
-	destroy_workqueue(z_erofs_workqueue);
-#endif
-err_destroy_cache:
-	kmem_cache_destroy(pcluster_cachep);
-	return err;
-}
-
-void z_erofs_exit_zip_subsystem(void)
-{
-#ifdef CONFIG_EROFS_FS_PCPU_KTHREAD
-	int cpu;
-
-	if (erofs_cpuhp_state)
-		cpuhp_remove_state_nocalls(erofs_cpuhp_state);
-
-	for_each_possible_cpu(cpu) {
-		if (z_erofs_pcpu_workers[cpu]) {
-			kthread_destroy_worker(z_erofs_pcpu_workers[cpu]);
-			z_erofs_pcpu_workers[cpu] = NULL;
-		}
-	}
-	kfree(z_erofs_pcpu_workers);
-#endif
-	destroy_workqueue(z_erofs_workqueue);
-	kmem_cache_destroy(pcluster_cachep);
+	return -ENOMEM;
 }
 
 enum z_erofs_collectmode {
@@ -830,39 +697,24 @@ err_out:
 	goto out;
 }
 
-static void z_erofs_vle_unzip_wq(struct work_struct *work);
-
 static void z_erofs_vle_unzip_kickoff(void *ptr, int bios)
 {
 	tagptr1_t t = tagptr_init(tagptr1_t, ptr);
 	struct z_erofs_unzip_io *io = tagptr_unfold_ptr(t);
 	bool background = tagptr_unfold_tags(t);
 
-	if (atomic_add_return(bios, &io->pending_bios))
-		return;
-
 	if (!background) {
-		complete(&io->u.done);
+		unsigned long flags;
+
+		spin_lock_irqsave(&io->u.wait.lock, flags);
+		if (!atomic_add_return(bios, &io->pending_bios))
+			wake_up_locked(&io->u.wait);
+		spin_unlock_irqrestore(&io->u.wait.lock, flags);
 		return;
 	}
 
-#ifdef CONFIG_EROFS_FS_PCPU_KTHREAD
-	{
-		struct kthread_worker *worker;
-
-		rcu_read_lock();
-		worker = z_erofs_pcpu_workers[raw_smp_processor_id()];
-		if (worker) {
-			kthread_queue_work(worker, &io->u.kwork);
-			rcu_read_unlock();
-			return;
-		}
-		rcu_read_unlock();
-	}
-#endif
-	/* no per-CPU worker on this CPU, fall back to the shared workqueue */
-	INIT_WORK(&io->u.work, z_erofs_vle_unzip_wq);
-	queue_work(z_erofs_workqueue, &io->u.work);
+	if (!atomic_add_return(bios, &io->pending_bios))
+		queue_work(z_erofs_workqueue, &io->u.work);
 }
 
 static inline void z_erofs_vle_read_endio(struct bio *bio)
@@ -1135,21 +987,6 @@ static void z_erofs_vle_unzip_wq(struct work_struct *work)
 	kvfree(iosb);
 }
 
-#ifdef CONFIG_EROFS_FS_PCPU_KTHREAD
-static void z_erofs_decompressqueue_kthread_work(struct kthread_work *work)
-{
-	struct z_erofs_unzip_io_sb *iosb =
-		container_of(work, struct z_erofs_unzip_io_sb, io.u.kwork);
-	LIST_HEAD(pagepool);
-
-	DBG_BUGON(iosb->io.head == Z_EROFS_PCLUSTER_TAIL_CLOSED);
-	z_erofs_vle_unzip_all(iosb->sb, &iosb->io, &pagepool);
-
-	put_pages_list(&pagepool);
-	kvfree(iosb);
-}
-#endif
-
 static struct page *pickup_page_for_submission(struct z_erofs_pcluster *pcl,
 					       unsigned int nr,
 					       struct list_head *pagepool,
@@ -1281,10 +1118,10 @@ static struct z_erofs_unzip_io *jobqueue_init(struct super_block *sb,
 	struct z_erofs_unzip_io_sb *iosb;
 
 	if (foreground) {
-		/* completion available for foreground io */
+		/* waitqueue available for foreground io */
 		DBG_BUGON(!io);
 
-		init_completion(&io->u.done);
+		init_waitqueue_head(&io->u.wait);
 		atomic_set(&io->pending_bios, 0);
 		goto out;
 	}
@@ -1295,17 +1132,7 @@ static struct z_erofs_unzip_io *jobqueue_init(struct super_block *sb,
 	/* initialize fields in the allocated descriptor */
 	io = &iosb->io;
 	iosb->sb = sb;
-#ifdef CONFIG_EROFS_FS_PCPU_KTHREAD
-	/*
-	 * The device kernel initialises the shared slot as a kthread_work and
-	 * re-INIT_WORKs it later in z_erofs_vle_unzip_kickoff() if it ends up
-	 * on the fallback workqueue, because the two initialisers clash inside
-	 * the union.
-	 */
-	kthread_init_work(&io->u.kwork, z_erofs_decompressqueue_kthread_work);
-#else
 	INIT_WORK(&io->u.work, z_erofs_vle_unzip_wq);
-#endif
 out:
 	io->head = Z_EROFS_PCLUSTER_TAIL_CLOSED;
 	return io;
@@ -1494,7 +1321,8 @@ static void z_erofs_submit_and_unzip(struct super_block *sb,
 		return;
 
 	/* wait until all bios are completed */
-	wait_for_completion(&io[JQ_SUBMIT].u.done);
+	wait_event(io[JQ_SUBMIT].u.wait,
+		   !atomic_read(&io[JQ_SUBMIT].pending_bios));
 
 	/* let's synchronous decompression */
 	z_erofs_vle_unzip_all(sb, &io[JQ_SUBMIT], pagepool);

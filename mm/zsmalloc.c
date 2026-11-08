@@ -347,7 +347,7 @@ static void destroy_cache(struct zs_pool *pool)
 static unsigned long cache_alloc_handle(struct zs_pool *pool, gfp_t gfp)
 {
 	return (unsigned long)kmem_cache_alloc(pool->handle_cachep,
-			gfp & ~(__GFP_HIGHMEM|__GFP_MOVABLE|__GFP_CMA));
+			gfp & ~(__GFP_HIGHMEM|__GFP_MOVABLE));
 }
 
 static void cache_free_handle(struct zs_pool *pool, unsigned long handle)
@@ -1048,9 +1048,6 @@ static void create_page_chain(struct size_class *class, struct zspage *zspage,
 				SetPageHugeObject(page);
 		} else {
 			prev_page->freelist = page;
-#ifdef CONFIG_SPRD_PAGE_OWNER
-			SetPagePrivate(page);
-#endif
 		}
 		prev_page = page;
 	}
@@ -1229,54 +1226,6 @@ unsigned long zs_get_total_pages(struct zs_pool *pool)
 	return atomic_long_read(&pool->pages_allocated);
 }
 EXPORT_SYMBOL_GPL(zs_get_total_pages);
-
-/**
- * zs_lookup_class_index() - Returns index of the zsmalloc &size_class
- * that hold objects of the provided size.
- * @pool: zsmalloc pool to use
- * @size: object size
- *
- * Context: Any context.
- *
- * Return: the index of the zsmalloc &size_class that hold objects of the
- * provided size.
- */
-unsigned int zs_lookup_class_index(struct zs_pool *pool, unsigned int size)
-{
-	return get_size_class_index(size);
-}
-EXPORT_SYMBOL_GPL(zs_lookup_class_index);
-
-/*
- * 5.4 backport shims for the zsmalloc object access API used by the
- * mainline zram driver.  The real thing (7.x) uses per-class locking and
- * an optional local copy; here the classic map/unmap interface provides
- * the same semantics (including the two-page objects handled internally
- * by __zs_map_object()).
- */
-void *zs_obj_read_begin(struct zs_pool *pool, unsigned long handle,
-			size_t mem_len, void *local_copy)
-{
-	return zs_map_object(pool, handle, ZS_MM_RO);
-}
-EXPORT_SYMBOL_GPL(zs_obj_read_begin);
-
-void zs_obj_read_end(struct zs_pool *pool, unsigned long handle,
-		     size_t mem_len, void *handle_mem)
-{
-	zs_unmap_object(pool, handle);
-}
-EXPORT_SYMBOL_GPL(zs_obj_read_end);
-
-void zs_obj_write(struct zs_pool *pool, unsigned long handle,
-		  void *handle_mem, size_t mem_len)
-{
-	void *dst = zs_map_object(pool, handle, ZS_MM_RW);
-
-	memcpy(dst, handle_mem, mem_len);
-	zs_unmap_object(pool, handle);
-}
-EXPORT_SYMBOL_GPL(zs_obj_write);
 
 /**
  * zs_map_object - get address of allocated object from handle.

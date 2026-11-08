@@ -159,20 +159,6 @@ static unsigned long __init_memblock memblock_addrs_overlap(phys_addr_t base1, p
 	return ((base1 < (base2 + size2)) && (base2 < (base1 + size1)));
 }
 
-#ifdef CONFIG_SPRD_MEM_OVERLAY_CHECK
-static void memblock_reserved_overlaps_check(char *type_name, struct memblock_region *old_regions,
-					phys_addr_t base, phys_addr_t size)
-{
-	if (!strcmp(type_name, "reserved")) {
-		pr_err("memblock overlap! base:[%#016llx - %#016llx], overlap:[%#016llx - %#016llx]",
-						(unsigned long long)old_regions->base,
-						(unsigned long long)old_regions->base + old_regions->size - 1,
-						(unsigned long long)base,
-						(unsigned long long)base + size - 1);
-	}
-}
-#endif
-
 bool __init_memblock memblock_overlaps_region(struct memblock_type *type,
 					phys_addr_t base, phys_addr_t size)
 {
@@ -182,12 +168,8 @@ bool __init_memblock memblock_overlaps_region(struct memblock_type *type,
 
 	for (i = 0; i < type->cnt; i++)
 		if (memblock_addrs_overlap(base, size, type->regions[i].base,
-					   type->regions[i].size)) {
-#ifdef CONFIG_SPRD_MEM_OVERLAY_CHECK
-			memblock_reserved_overlaps_check(type->name, &type->regions[i], base, size);
-#endif
+					   type->regions[i].size))
 			break;
-		}
 	return i < type->cnt;
 }
 
@@ -476,7 +458,7 @@ static int __init_memblock memblock_double_array(struct memblock_type *type,
 		kfree(old_array);
 	else if (old_array != memblock_memory_init_regions &&
 		 old_array != memblock_reserved_init_regions)
-		memblock_free_ptr(old_array, old_alloc_size);
+		memblock_free(__pa(old_array), old_alloc_size);
 
 	/*
 	 * Reserve the new array if that comes from the memblock.  Otherwise, we
@@ -591,13 +573,6 @@ int __init_memblock memblock_add_range(struct memblock_type *type,
 		type->total_size = size;
 		return 0;
 	}
-#ifdef CONFIG_SPRD_MEM_OVERLAY_CHECK
-	if (memblock_overlaps_region(&memblock.reserved, base, size)) {
-		panic("Detected Overlay Region: [%#016llx - %#016llx]\n",
-			(unsigned long long)base,
-			(unsigned long long)base + size - 1);
-	}
-#endif
 repeat:
 	/*
 	 * The following is executed twice.  Once with %false @insert and
@@ -799,20 +774,6 @@ int __init_memblock memblock_remove(phys_addr_t base, phys_addr_t size)
 		     &base, &end, (void *)_RET_IP_);
 
 	return memblock_remove_range(&memblock.memory, base, size);
-}
-
-/**
- * memblock_free_ptr - free boot memory allocation
- * @ptr: starting address of the  boot memory allocation
- * @size: size of the boot memory block in bytes
- *
- * Free boot memory block previously allocated by memblock_alloc_xx() API.
- * The freeing memory will not be released to the buddy allocator.
- */
-void __init_memblock memblock_free_ptr(void *ptr, size_t size)
-{
-	if (ptr)
-		memblock_free(__pa(ptr), size);
 }
 
 /**

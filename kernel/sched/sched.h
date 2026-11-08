@@ -3,7 +3,6 @@
  * Scheduler internal types and methods:
  */
 #include <linux/sched.h>
-#include <linux/percpu.h>
 
 #include <linux/sched/autogroup.h>
 #include <linux/sched/clock.h>
@@ -155,10 +154,6 @@ extern long calc_load_fold_active(struct rq *this_rq, long adjust);
  * Single value that denotes runtime == period, ie unlimited time.
  */
 #define RUNTIME_INF		((u64)~0ULL)
-
-#ifdef CONFIG_SPRD_CORE_CTL
-void init_sched_groups_capacity(int cpu, struct sched_domain *sd);
-#endif
 
 static inline int idle_policy(int policy)
 {
@@ -2606,40 +2601,5 @@ static inline void membarrier_switch_mm(struct rq *rq,
 					struct mm_struct *prev_mm,
 					struct mm_struct *next_mm)
 {
-}
-#endif
-
-#ifdef CONFIG_SPRD_ROTATION_TASK
-DECLARE_PER_CPU_SHARED_ALIGNED(bool, cpu_reserved);
-extern struct cpumask min_cap_cpu_mask;
-
-static inline bool is_reserved(int cpu)
-{
-	return per_cpu(cpu_reserved, cpu);
-}
-
-static inline void mark_reserved(int cpu)
-{
-	per_cpu(cpu_reserved, cpu) = true;
-}
-
-static inline void clear_reserved(int cpu)
-{
-	per_cpu(cpu_reserved, cpu) = false;
-}
-
-void check_for_task_rotation(struct rq *src_rq);
-u64 sched_ktime_clock(void);
-#else
-static inline bool is_reserved(int cpu)
-{
-	return false;
-}
-static inline void mark_reserved(int cpu) { }
-static inline void clear_reserved(int cpu) { }
-static inline void check_for_task_rotation(struct rq *src_rq) { }
-static inline u64 sched_ktime_clock(void)
-{
-	return sched_clock();
 }
 #endif

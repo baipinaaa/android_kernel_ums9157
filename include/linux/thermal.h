@@ -339,10 +339,6 @@ struct thermal_zone_params {
 	 * 		Used by thermal zone drivers (default 0).
 	 */
 	int offset;
-#ifdef CONFIG_SPRD_THERMAL_DEBUG
-	int thm_enable;
-	int reset_done;
-#endif
 
 	ANDROID_KABI_RESERVE(1);
 };
@@ -576,11 +572,6 @@ static inline int thermal_generate_netlink_event(struct thermal_zone_device *tz,
 {
 	return 0;
 }
-#endif
-
-#ifdef CONFIG_SPRD_THERMAL_MAX_FREQ_LIMIT
-int cpufreq_check_cdev(struct thermal_cooling_device *cdev,
-		       struct thermal_zone_device *tz);
 #endif
 
 #endif /* __THERMAL_H__ */

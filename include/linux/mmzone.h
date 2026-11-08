@@ -286,7 +286,6 @@ static inline int is_active_lru(enum lru_list lru)
 	return (lru == LRU_ACTIVE_ANON || lru == LRU_ACTIVE_FILE);
 }
 
-#ifndef CONFIG_LRU_BALANCE_BASE_THRASHING
 struct zone_reclaim_stat {
 	/*
 	 * The pageout code in vmscan.c keeps track of how many of the
@@ -299,25 +298,12 @@ struct zone_reclaim_stat {
 	unsigned long		recent_rotated[2];
 	unsigned long		recent_scanned[2];
 };
-#endif
 
 struct lruvec {
 	struct list_head		lists[NR_LRU_LISTS];
-#ifndef CONFIG_LRU_BALANCE_BASE_THRASHING
 	struct zone_reclaim_stat	reclaim_stat;
 	/* Evictions & activations on the inactive file list */
 	atomic_long_t			inactive_age;
-#else
-	/*
-	 * These track the cost of reclaiming one LRU - file or anon -
-	 * over the other. As the observed cost of reclaiming one LRU
-	 * increases, the reclaim scan balance tips toward the other.
-	 */
-	unsigned long			anon_cost;
-	unsigned long			file_cost;
-	/* Non-resident age, driven by LRU movement */
-	atomic_long_t			nonresident_age;
-#endif
 	/* Refaults at the time of last reclaim cycle */
 	unsigned long			refaults;
 #ifdef CONFIG_MEMCG

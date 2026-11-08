@@ -1238,16 +1238,6 @@ int blkcg_init_queue(struct request_queue *q)
 	if (preloaded)
 		radix_tree_preload_end();
 
-	/*
-	 * The device kernel (Image 0x887de4) calls blk_ioprio_init() before
-	 * blk_throtl_init(), and both failure paths funnel into the same
-	 * blkg teardown -- the rq_qos node added here is released later by
-	 * rq_qos_exit() from blk_release_queue().
-	 */
-	ret = blk_ioprio_init(q);
-	if (ret)
-		goto err_destroy_all;
-
 	ret = blk_throtl_init(q);
 	if (ret)
 		goto err_destroy_all;

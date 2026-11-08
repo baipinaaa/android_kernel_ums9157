@@ -52,11 +52,6 @@
 #include <linux/dax.h>
 #include <linux/psi.h>
 
-#ifdef CONFIG_RCC
-#include <linux/version.h>
-#include <linux/vmstat.h>
-#endif
-
 #include <asm/tlbflush.h>
 #include <asm/div64.h>
 
@@ -78,10 +73,6 @@ struct scan_control {
 	 */
 	nodemask_t	*nodemask;
 
-#ifdef CONFIG_RCC
-	/* 0: not in rcc module, 1: scan anon; 2: scan file; 3: scan both */
-	int rcc_mode;
-#endif
 	/*
 	 * The memory cgroup that hit its limit and as a result is the
 	 * primary target of this reclaim invocation.
@@ -113,15 +104,6 @@ struct scan_control {
 	/* One of the zones is ready for compaction */
 	unsigned int compaction_ready:1;
 
-	/* The anonymous pages on the current node are below vm.anon_min_kbytes */
-	unsigned int anon_below_min:1;
-
-	/* The clean file pages on the current node are below vm.clean_low_kbytes */
-	unsigned int clean_below_low:1;
-
-	/* The clean file pages on the current node are below vm.clean_min_kbytes */
-	unsigned int clean_below_min:1;
-
 	/* Allocation order */
 	s8 order;
 
@@ -152,12 +134,6 @@ struct scan_control {
 
 	/* for recording the reclaimed slab by now */
 	struct reclaim_state reclaim_state;
-	/*
-	 * Reclaim pages from a vma. If the page is shared by other tasks
-	 * it is zapped from a vma without reclaim so it ends up remaining
-	 * on memory until last task zap it.
-	 */
-	struct vm_area_struct *target_vma;
 };
 
 #ifdef ARCH_HAS_PREFETCH
@@ -188,30 +164,10 @@ struct scan_control {
 #define prefetchw_prev_lru_page(_page, _base, _field) do { } while (0)
 #endif
 
-unsigned long sysctl_anon_min_kbytes __read_mostly = CONFIG_ANON_MIN_KBYTES;
-unsigned long sysctl_clean_low_kbytes __read_mostly = CONFIG_CLEAN_LOW_KBYTES;
-unsigned long sysctl_clean_min_kbytes __read_mostly = CONFIG_CLEAN_MIN_KBYTES;
-
 /*
- * From 0 .. 200.  Higher means more swappy.
+ * From 0 .. 100.  Higher means more swappy.
  */
 int vm_swappiness = 60;
-
-#ifdef CONFIG_DIRECT_SWAPPINESS
-/*
- * Direct reclaim swappiness, exptct 0 - 60. Higher means more
- * swappy and slower.
- */
-int direct_vm_swappiness = 60;
-#endif
-
-#ifdef CONFIG_WRITEBACK_SWAPCACHE
-  /*
-   * writeback swapcache, expect 0 or 1
-   */
-int writeback_swapcache;
-#endif
-
 /*
  * The total number of pages which are beyond the high watermark within all
  * zones.
@@ -1092,10 +1048,6 @@ static enum page_references page_check_references(struct page *page,
 	if (vm_flags & VM_LOCKED)
 		return PAGEREF_RECLAIM;
 
-	/* rmap lock contention: rotate */
-	if (referenced_ptes == -1)
-		return PAGEREF_KEEP;
-
 	if (referenced_ptes) {
 		if (PageSwapBacked(page))
 			return PAGEREF_ACTIVATE;
@@ -1199,8 +1151,6 @@ static unsigned long shrink_page_list(struct list_head *page_list,
 			goto keep;
 
 		VM_BUG_ON_PAGE(PageActive(page), page);
-		if (pgdat)
-			VM_BUG_ON_PAGE(page_pgdat(page) != pgdat, page);
 
 		nr_pages = compound_nr(page);
 
@@ -1402,7 +1352,7 @@ static unsigned long shrink_page_list(struct list_head *page_list,
 
 			if (unlikely(PageTransHuge(page)))
 				flags |= TTU_SPLIT_HUGE_PMD;
-			if (!try_to_unmap(page, flags, sc->target_vma)) {
+			if (!try_to_unmap(page, flags)) {
 				stat->nr_unmap_fail += nr_pages;
 				goto activate_locked;
 			}
@@ -1421,8 +1371,7 @@ static unsigned long shrink_page_list(struct list_head *page_list,
 			 */
 			if (page_is_file_cache(page) &&
 			    (!current_is_kswapd() || !PageReclaim(page) ||
-			    (pgdat &&
-			     !test_bit(PGDAT_DIRTY, &pgdat->flags)))) {
+			     !test_bit(PGDAT_DIRTY, &pgdat->flags))) {
 				/*
 				 * Immediately reclaim when written back.
 				 * Similar in principal to deactivate_page()
@@ -1454,10 +1403,6 @@ static unsigned long shrink_page_list(struct list_head *page_list,
 			case PAGE_ACTIVATE:
 				goto activate_locked;
 			case PAGE_SUCCESS:
-#ifdef CONFIG_LRU_BALANCE_BASE_THRASHING
-				stat->nr_pageout += hpage_nr_pages(page);
-#endif
-
 				if (PageWriteback(page))
 					goto keep;
 				if (PageDirty(page))
@@ -1549,13 +1494,6 @@ free_it:
 			(*get_compound_page_dtor(page))(page);
 		else
 			list_add(&page->lru, &free_pages);
-		/*
-		 * If pagelist are from multiple zones, we should decrease
-		 * NR_ISOLATED_ANON + x on freed pages in here.
-		 */
-		if (!pgdat)
-			dec_node_page_state(page, NR_ISOLATED_ANON +
-					page_is_file_cache(page));
 		continue;
 
 activate_locked_split:
@@ -1605,8 +1543,6 @@ unsigned long reclaim_clean_pages_from_list(struct zone *zone,
 		.gfp_mask = GFP_KERNEL,
 		.priority = DEF_PRIORITY,
 		.may_unmap = 1,
-		/* Doesn't allow to write out dirty page */
-		.may_writepage = 0,
 	};
 	struct reclaim_stat dummy_stat;
 	unsigned long ret;
@@ -1627,41 +1563,6 @@ unsigned long reclaim_clean_pages_from_list(struct zone *zone,
 	mod_node_page_state(zone->zone_pgdat, NR_ISOLATED_FILE, -ret);
 	return ret;
 }
-
-#ifdef CONFIG_PROCESS_RECLAIM
-unsigned long reclaim_pages_from_list(struct list_head *page_list,
-					struct vm_area_struct *vma)
-{
-	struct scan_control sc = {
-		.gfp_mask = GFP_KERNEL,
-		.priority = DEF_PRIORITY,
-		.may_writepage = 1,
-		.may_unmap = 1,
-		.may_swap = 1,
-		.target_vma = vma,
-	};
-
-	unsigned long nr_reclaimed;
-	struct page *page;
-	struct reclaim_stat dummy_stat;
-
-	list_for_each_entry(page, page_list, lru)
-		ClearPageActive(page);
-
-	nr_reclaimed = shrink_page_list(page_list, NULL, &sc,
-			TTU_IGNORE_ACCESS, &dummy_stat, true);
-
-	while (!list_empty(page_list)) {
-		page = lru_to_page(page_list);
-		list_del(&page->lru);
-		dec_node_page_state(page, NR_ISOLATED_ANON +
-				page_is_file_cache(page));
-		putback_lru_page(page);
-	}
-
-	return nr_reclaimed;
-}
-#endif
 
 /*
  * Attempt to remove the specified page from its LRU.  Only take this page
@@ -2018,10 +1919,6 @@ static unsigned noinline_for_stack move_pages_to_lru(struct lruvec *lruvec,
 				list_add(&page->lru, &pages_to_free);
 		} else {
 			nr_moved += nr_pages;
-#ifdef CONFIG_LRU_BALANCE_BASE_THRASHING
-			if (PageActive(page))
-				workingset_age_nonresident(lruvec, hpage_nr_pages(page));
-#endif
 		}
 	}
 
@@ -2062,9 +1959,7 @@ shrink_inactive_list(unsigned long nr_to_scan, struct lruvec *lruvec,
 	int file = is_file_lru(lru);
 	enum vm_event_item item;
 	struct pglist_data *pgdat = lruvec_pgdat(lruvec);
-#ifndef CONFIG_LRU_BALANCE_BASE_THRASHING
 	struct zone_reclaim_stat *reclaim_stat = &lruvec->reclaim_stat;
-#endif
 	bool stalled = false;
 
 	while (unlikely(too_many_isolated(pgdat, file, sc))) {
@@ -2088,17 +1983,12 @@ shrink_inactive_list(unsigned long nr_to_scan, struct lruvec *lruvec,
 				     &nr_scanned, sc, lru);
 
 	__mod_node_page_state(pgdat, NR_ISOLATED_ANON + file, nr_taken);
-#ifndef CONFIG_LRU_BALANCE_BASE_THRASHING
 	reclaim_stat->recent_scanned[file] += nr_taken;
-#endif
 
 	item = current_is_kswapd() ? PGSCAN_KSWAPD : PGSCAN_DIRECT;
 	if (global_reclaim(sc))
 		__count_vm_events(item, nr_scanned);
 	__count_memcg_events(lruvec_memcg(lruvec), item, nr_scanned);
-#ifdef CONFIG_LRU_BALANCE_BASE_THRASHING
-	__count_vm_events(PGSCAN_ANON + file, nr_scanned);
-#endif
 	spin_unlock_irq(&pgdat->lru_lock);
 
 	if (nr_taken == 0)
@@ -2108,23 +1998,17 @@ shrink_inactive_list(unsigned long nr_to_scan, struct lruvec *lruvec,
 				&stat, false);
 
 	spin_lock_irq(&pgdat->lru_lock);
-#ifndef CONFIG_LRU_BALANCE_BASE_THRASHING
-	reclaim_stat->recent_rotated[0] += stat.nr_activate[0];
-	reclaim_stat->recent_rotated[1] += stat.nr_activate[1];
-#endif
 
 	item = current_is_kswapd() ? PGSTEAL_KSWAPD : PGSTEAL_DIRECT;
 	if (global_reclaim(sc))
 		__count_vm_events(item, nr_reclaimed);
 	__count_memcg_events(lruvec_memcg(lruvec), item, nr_reclaimed);
+	reclaim_stat->recent_rotated[0] += stat.nr_activate[0];
+	reclaim_stat->recent_rotated[1] += stat.nr_activate[1];
 
 	move_pages_to_lru(lruvec, &page_list);
 
 	__mod_node_page_state(pgdat, NR_ISOLATED_ANON + file, -nr_taken);
-#ifdef CONFIG_LRU_BALANCE_BASE_THRASHING
-	lru_note_cost(lruvec, file, stat.nr_pageout);
-	__count_vm_events(PGSTEAL_ANON + file, nr_reclaimed);
-#endif
 
 	spin_unlock_irq(&pgdat->lru_lock);
 
@@ -2171,9 +2055,7 @@ static void shrink_active_list(unsigned long nr_to_scan,
 	LIST_HEAD(l_active);
 	LIST_HEAD(l_inactive);
 	struct page *page;
-#ifndef CONFIG_LRU_BALANCE_BASE_THRASHING
 	struct zone_reclaim_stat *reclaim_stat = &lruvec->reclaim_stat;
-#endif
 	unsigned nr_deactivate, nr_activate;
 	unsigned nr_rotated = 0;
 	int file = is_file_lru(lru);
@@ -2187,9 +2069,8 @@ static void shrink_active_list(unsigned long nr_to_scan,
 				     &nr_scanned, sc, lru);
 
 	__mod_node_page_state(pgdat, NR_ISOLATED_ANON + file, nr_taken);
-#ifndef CONFIG_LRU_BALANCE_BASE_THRASHING
 	reclaim_stat->recent_scanned[file] += nr_taken;
-#endif
+
 	__count_vm_events(PGREFILL, nr_scanned);
 	__count_memcg_events(lruvec_memcg(lruvec), PGREFILL, nr_scanned);
 
@@ -2213,12 +2094,9 @@ static void shrink_active_list(unsigned long nr_to_scan,
 			}
 		}
 
-		/* Referenced or rmap lock contention: rotate */
 		if (page_referenced(page, 0, sc->target_mem_cgroup,
-				     &vm_flags) != 0) {
-#ifndef CONFIG_LRU_BALANCE_BASE_THRASHING
+				    &vm_flags)) {
 			nr_rotated += hpage_nr_pages(page);
-#endif
 			/*
 			 * Identify referenced, file-backed active pages and
 			 * give them one more trip around the active list. So
@@ -2229,7 +2107,6 @@ static void shrink_active_list(unsigned long nr_to_scan,
 			 * so we ignore them here.
 			 */
 			if ((vm_flags & VM_EXEC) && page_is_file_cache(page)) {
-				nr_rotated += hpage_nr_pages(page);
 				list_add(&page->lru, &l_active);
 				continue;
 			}
@@ -2244,9 +2121,13 @@ static void shrink_active_list(unsigned long nr_to_scan,
 	 * Move pages back to the lru list.
 	 */
 	spin_lock_irq(&pgdat->lru_lock);
-#ifndef CONFIG_LRU_BALANCE_BASE_THRASHING
+	/*
+	 * Count referenced pages from currently used mappings as rotated,
+	 * even though only some of them are actually re-activated.  This
+	 * helps balance scan pressure between file and anonymous pages in
+	 * get_scan_count.
+	 */
 	reclaim_stat->recent_rotated[file] += nr_rotated;
-#endif
 
 	nr_activate = move_pages_to_lru(lruvec, &l_active);
 	nr_deactivate = move_pages_to_lru(lruvec, &l_inactive);
@@ -2407,54 +2288,6 @@ static unsigned long shrink_list(enum lru_list lru, unsigned long nr_to_scan,
 	return shrink_inactive_list(nr_to_scan, lruvec, sc, lru);
 }
 
-static void prepare_workingset_protection(pg_data_t *pgdat, struct scan_control *sc)
-{
-	/*
-	 * Check the number of anonymous pages to protect them from
-	 * reclaiming if their amount is below the specified.
-	 */
-	if (sysctl_anon_min_kbytes) {
-		unsigned long reclaimable_anon;
-
-		reclaimable_anon =
-			node_page_state(pgdat, NR_ACTIVE_ANON) +
-			node_page_state(pgdat, NR_INACTIVE_ANON) +
-			node_page_state(pgdat, NR_ISOLATED_ANON);
-		reclaimable_anon <<= (PAGE_SHIFT - 10);
-
-		sc->anon_below_min = reclaimable_anon < sysctl_anon_min_kbytes;
-	} else
-		sc->anon_below_min = 0;
-
-	/*
-	 * Check the number of clean file pages to protect them from
-	 * reclaiming if their amount is below the specified.
-	 */
-	if (sysctl_clean_low_kbytes || sysctl_clean_min_kbytes) {
-		unsigned long reclaimable_file, dirty, clean;
-
-		reclaimable_file =
-			node_page_state(pgdat, NR_ACTIVE_FILE) +
-			node_page_state(pgdat, NR_INACTIVE_FILE) +
-			node_page_state(pgdat, NR_ISOLATED_FILE);
-		dirty = node_page_state(pgdat, NR_FILE_DIRTY);
-		/*
-		 * node_page_state() sum can go out of sync since
-		 * all the values are not read at once.
-		 */
-		if (likely(reclaimable_file > dirty))
-			clean = (reclaimable_file - dirty) << (PAGE_SHIFT - 10);
-		else
-			clean = 0;
-
-		sc->clean_below_low = clean < sysctl_clean_low_kbytes;
-		sc->clean_below_min = clean < sysctl_clean_min_kbytes;
-	} else {
-		sc->clean_below_low = 0;
-		sc->clean_below_min = 0;
-	}
-}
-
 enum scan_balance {
 	SCAN_EQUAL,
 	SCAN_FRACT,
@@ -2476,26 +2309,15 @@ static void get_scan_count(struct lruvec *lruvec, struct mem_cgroup *memcg,
 			   unsigned long *lru_pages)
 {
 	int swappiness = mem_cgroup_swappiness(memcg);
-#ifdef CONFIG_LRU_BALANCE_BASE_THRASHING
-	unsigned long anon_cost, file_cost, total_cost;
-#else
 	struct zone_reclaim_stat *reclaim_stat = &lruvec->reclaim_stat;
-	unsigned long anon, file;
-	unsigned long anon_prio, file_prio;
-#endif
 	u64 fraction[2];
 	u64 denominator = 0;	/* gcc */
 	struct pglist_data *pgdat = lruvec_pgdat(lruvec);
+	unsigned long anon_prio, file_prio;
 	enum scan_balance scan_balance;
+	unsigned long anon, file;
 	unsigned long ap, fp;
 	enum lru_list lru;
-
-#ifdef CONFIG_DIRECT_SWAPPINESS
-	if (!current_is_kswapd())
-		swappiness = direct_vm_swappiness;
-#endif
-
-	prepare_workingset_protection(pgdat, sc);
 
 	/* If we have no swap space, do not bother scanning anon pages. */
 	if (!sc->may_swap || mem_cgroup_get_nr_swap_pages(memcg) <= 0) {
@@ -2568,15 +2390,6 @@ static void get_scan_count(struct lruvec *lruvec, struct mem_cgroup *memcg,
 	}
 
 	/*
-	 * Force-scan anon if clean file pages is under vm.clean_low_kbytes
-	 * or vm.clean_min_kbytes.
-	 */
-	if (sc->clean_below_low || sc->clean_below_min) {
-		scan_balance = SCAN_ANON;
-		goto out;
-	}
-
-	/*
 	 * If there is enough inactive page cache, i.e. if the size of the
 	 * inactive list is greater than that of the active list *and* the
 	 * inactive list actually has some pages to scan on this priority, we
@@ -2594,44 +2407,22 @@ static void get_scan_count(struct lruvec *lruvec, struct mem_cgroup *memcg,
 	scan_balance = SCAN_FRACT;
 
 	/*
-	 * Calculate the pressure balance between anon and file pages.
-	 *
-	 * The amount of pressure we put on each LRU is inversely
-	 * proportional to the cost of reclaiming each list, as
-	 * determined by the share of pages that are refaulting, times
-	 * the relative IO cost of bringing back a swapped out
-	 * anonymous page vs reloading a filesystem page (swappiness).
-	 *
-	 * Although we limit that influence to ensure no list gets
-	 * left behind completely: at least a third of the pressure is
-	 * applied, before swappiness.
-	 *
-	 * With swappiness at 100, anon and file have equal IO cost.
+	 * With swappiness at 100, anonymous and file have the same priority.
+	 * This scanning priority is essentially the inverse of IO cost.
 	 */
-
-#ifdef CONFIG_LRU_BALANCE_BASE_THRASHING
-	total_cost = lruvec->anon_cost + lruvec->file_cost;
-	anon_cost = total_cost + lruvec->anon_cost;
-	file_cost = total_cost + lruvec->file_cost;
-	total_cost = anon_cost + file_cost;
-
-	ap = swappiness * (total_cost + 1);
-	ap /= anon_cost + 1;
-
-	fp = (200 - swappiness) * (total_cost + 1);
-	fp /= file_cost + 1;
-
-	fraction[0] = ap;
-	fraction[1] = fp;
-	denominator = ap + fp;
-#else
 	anon_prio = swappiness;
 	file_prio = 200 - anon_prio;
 
 	/*
+	 * OK, so we have swap space and a fair amount of page cache
+	 * pages.  We use the recently rotated / recently scanned
+	 * ratios to determine how valuable each cache is.
+	 *
 	 * Because workloads change over time (and to avoid overflow)
 	 * we keep these statistics as a floating average, which ends
-	 * up weighing recent refaults more than old ones.
+	 * up weighing recent references more than old ones.
+	 *
+	 * anon in [0], file in [1]
 	 */
 
 	anon  = lruvec_lru_size(lruvec, LRU_ACTIVE_ANON, MAX_NR_ZONES) +
@@ -2640,7 +2431,6 @@ static void get_scan_count(struct lruvec *lruvec, struct mem_cgroup *memcg,
 		lruvec_lru_size(lruvec, LRU_INACTIVE_FILE, MAX_NR_ZONES);
 
 	spin_lock_irq(&pgdat->lru_lock);
-
 	if (unlikely(reclaim_stat->recent_scanned[0] > anon / 4)) {
 		reclaim_stat->recent_scanned[0] /= 2;
 		reclaim_stat->recent_rotated[0] /= 2;
@@ -2666,17 +2456,6 @@ static void get_scan_count(struct lruvec *lruvec, struct mem_cgroup *memcg,
 	fraction[0] = ap;
 	fraction[1] = fp;
 	denominator = ap + fp + 1;
-#endif
-#ifdef CONFIG_RCC
-	if (sc->rcc_mode) {
-		if (sc->rcc_mode == RCC_MODE_ANON)
-			scan_balance = SCAN_ANON;
-		else if (sc->rcc_mode == RCC_MODE_FILE)
-			scan_balance = SCAN_FILE;
-		else
-			scan_balance = SCAN_EQUAL;
-	}
-#endif
 out:
 	*lru_pages = 0;
 	for_each_evictable_lru(lru) {
@@ -2783,25 +2562,6 @@ out:
 		default:
 			/* Look ma, no brain */
 			BUG();
-		}
-
-		/*
-		 * Hard protection of the working set.
-		 */
-		if (file) {
-			/*
-			 * Don't reclaim file pages when the amount of
-			 * clean file pages is below vm.clean_min_kbytes.
-			 */
-			if (sc->clean_below_min)
-				scan = 0;
-		} else {
-			/*
-			 * Don't reclaim anonymous pages when their
-			 * amount is below vm.anon_min_kbytes.
-			 */
-			if (sc->anon_below_min)
-				scan = 0;
 		}
 
 		*lru_pages += lruvec_size;
@@ -3848,9 +3608,6 @@ static int balance_pgdat(pg_data_t *pgdat, int order, int classzone_idx)
 	struct zone *zone;
 	struct scan_control sc = {
 		.gfp_mask = GFP_KERNEL,
-#ifdef CONFIG_WRITEBACK_SWAPCACHE
-		.may_writepage = !!writeback_swapcache,
-#endif
 		.order = order,
 		.may_unmap = 1,
 	};
@@ -4647,43 +4404,3 @@ void check_move_unevictable_pages(struct pagevec *pvec)
 	}
 }
 EXPORT_SYMBOL_GPL(check_move_unevictable_pages);
-
-#ifdef CONFIG_RCC
-
-/* purpose: add for free pages in rcc mode
- * arguments:
- *    nr_pages: page count need to free.
- *    mode:  1: scan anon; 2: scan file; 3: scan both.
- * output:
- *    page count free  in this time.
- */
-int try_to_free_pages_ex(int nr_pages, int mode)
-{
-	unsigned long reclaimed;
-
-	gfp_t mask = GFP_KERNEL | __GFP_HIGHMEM | __GFP_FS | __GFP_IO;
-	struct scan_control sc = {
-		.gfp_mask = mask,
-		.reclaim_idx = MAX_NR_ZONES - 1,
-		.may_writepage = 0,
-		.nr_to_reclaim = nr_pages,
-		.may_unmap = 1,
-		.may_swap = !!(mode & RCC_MODE_ANON),
-		.order = 0,
-		.priority = DEF_PRIORITY,
-		.rcc_mode = mode,
-		.target_mem_cgroup = NULL,
-		.nodemask = NULL,
-	};
-	struct zonelist *zonelist = node_zonelist(numa_node_id(), mask);
-	enum vm_event_item item;
-
-	reclaimed = do_try_to_free_pages(zonelist, &sc);
-	item = ALLOCSTALL_NORMAL - ZONE_NORMAL + sc.reclaim_idx;
-
-	if (global_reclaim(&sc) && raw_cpu_read(vm_event_states.event[item]))
-		raw_cpu_dec(vm_event_states.event[item]);
-
-	return reclaimed;
-}
-#endif

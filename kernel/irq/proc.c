@@ -535,14 +535,3 @@ outsparse:
 	return 0;
 }
 #endif
-
-#ifdef CONFIG_SPRD_SYSDUMP
-/*
- * 设备内核镜像中没有 sprd_dump_interrupts 符号；302 树的实现依赖
- * sysdump64.h 的 ACTUAL_NR_IRQS 与独立的 seq_buf 输出路径。
- * 基线只保留空实现以满足 sysdump 的链接需求。
- */
-void sprd_dump_interrupts(void)
-{
-}
-#endif

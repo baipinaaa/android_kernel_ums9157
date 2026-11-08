@@ -307,12 +307,6 @@ static inline struct io_context *create_io_context(gfp_t gfp_mask, int node)
 	return current->io_context;
 }
 
-#ifdef CONFIG_BLK_CGROUP_IOPRIO
-extern int blk_ioprio_init(struct request_queue *q);
-#else /* CONFIG_BLK_CGROUP_IOPRIO */
-static inline int blk_ioprio_init(struct request_queue *q) { return 0; }
-#endif /* CONFIG_BLK_CGROUP_IOPRIO */
-
 /*
  * Internal throttling interface
  */

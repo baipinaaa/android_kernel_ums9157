@@ -85,14 +85,6 @@ extern int sysctl_protected_symlinks;
 extern int sysctl_protected_hardlinks;
 extern int sysctl_protected_fifos;
 extern int sysctl_protected_regular;
-#if defined(CONFIG_SPRD_DEBUG)
-extern int sysctl_fs_timeout[];
-#define vfs_open_max_ms		(sysctl_fs_timeout[0])
-#define vfs_write_max_ms	(sysctl_fs_timeout[1])
-#define fs_sync_max_ms		(sysctl_fs_timeout[2])
-#define io_schedule_max_ms	(sysctl_fs_timeout[3])
-#define io_interval		(sysctl_fs_timeout[4])
-#endif
 
 typedef __kernel_rwf_t rwf_t;
 
@@ -330,8 +322,6 @@ enum rw_hint {
 /* iocb->ki_waitq is valid */
 #define IOCB_WAITQ		(1 << 19)
 #define IOCB_NOIO		(1 << 20)
-/* kiocb is a read or write operation submitted by fs/aio.c. */
-#define IOCB_AIO_RW		(1 << 23)
 
 struct kiocb {
 	struct file		*ki_filp;
@@ -562,11 +552,6 @@ static inline void i_mmap_lock_write(struct address_space *mapping)
 static inline void i_mmap_unlock_write(struct address_space *mapping)
 {
 	up_write(&mapping->i_mmap_rwsem);
-}
-
-static inline int i_mmap_trylock_read(struct address_space *mapping)
-{
-	return down_read_trylock(&mapping->i_mmap_rwsem);
 }
 
 static inline void i_mmap_lock_read(struct address_space *mapping)
@@ -1416,21 +1401,21 @@ extern int send_sigurg(struct fown_struct *fown);
  * sb->s_flags.  Note that these mirror the equivalent MS_* flags where
  * represented in both.
  */
-#define SB_RDONLY       BIT(0)	/* Mount read-only */
-#define SB_NOSUID       BIT(1)	/* Ignore suid and sgid bits */
-#define SB_NODEV        BIT(2)	/* Disallow access to device special files */
-#define SB_NOEXEC       BIT(3)	/* Disallow program execution */
-#define SB_SYNCHRONOUS  BIT(4)	/* Writes are synced at once */
-#define SB_MANDLOCK     BIT(6)	/* Allow mandatory locks on an FS */
-#define SB_DIRSYNC      BIT(7)	/* Directory modifications are synchronous */
-#define SB_NOATIME      BIT(10)	/* Do not update access times. */
-#define SB_NODIRATIME   BIT(11)	/* Do not update directory access times */
-#define SB_SILENT       BIT(15)
-#define SB_POSIXACL     BIT(16)	/* VFS does not apply the umask */
-#define SB_INLINECRYPT	BIT(17)	/* Use blk-crypto for encrypted files */
-#define SB_KERNMOUNT    BIT(22)	/* this is a kern_mount call */
-#define SB_I_VERSION    BIT(23)	/* Update inode I_version field */
-#define SB_LAZYTIME     BIT(25)	/* Update the on-disk [acm]times lazily */
+#define SB_RDONLY	 1	/* Mount read-only */
+#define SB_NOSUID	 2	/* Ignore suid and sgid bits */
+#define SB_NODEV	 4	/* Disallow access to device special files */
+#define SB_NOEXEC	 8	/* Disallow program execution */
+#define SB_SYNCHRONOUS	16	/* Writes are synced at once */
+#define SB_MANDLOCK	64	/* Allow mandatory locks on an FS */
+#define SB_DIRSYNC	128	/* Directory modifications are synchronous */
+#define SB_NOATIME	1024	/* Do not update access times. */
+#define SB_NODIRATIME	2048	/* Do not update directory access times */
+#define SB_SILENT	32768
+#define SB_POSIXACL	(1<<16)	/* VFS does not apply the umask */
+#define SB_INLINECRYPT	(1<<17)	/* Use blk-crypto for encrypted files */
+#define SB_KERNMOUNT	(1<<22) /* this is a kern_mount call */
+#define SB_I_VERSION	(1<<23) /* Update inode I_version field */
+#define SB_LAZYTIME	(1<<25) /* Update the on-disk [acm]times lazily */
 
 /* These sb flags are internal to the kernel */
 #define SB_SUBMOUNT     (1<<26)
@@ -1445,20 +1430,6 @@ extern int send_sigurg(struct fown_struct *fown);
 
 #define sb_has_strict_encoding(sb) \
 	(sb->s_encoding_flags & SB_ENC_STRICT_MODE_FL)
-
-/* These flags relate to encoding and casefolding */
-#define SB_ENC_STRICT_MODE_FL          (1 << 0)
-#define SB_ENC_NO_COMPAT_FALLBACK_FL   (1 << 1)
-
-#define sb_has_strict_encoding(sb) \
-	(sb->s_encoding_flags & SB_ENC_STRICT_MODE_FL)
-
-#if IS_ENABLED(CONFIG_UNICODE)
-#define sb_no_casefold_compat_fallback(sb) \
-       (sb->s_encoding_flags & SB_ENC_NO_COMPAT_FALLBACK_FL)
-#else
-#define sb_no_casefold_compat_fallback(sb) (1)
-#endif
 
 /*
  *	Umount options
@@ -2644,7 +2615,6 @@ extern int do_truncate(struct dentry *, loff_t start, unsigned int time_attrs,
 		       struct file *filp);
 extern int vfs_fallocate(struct file *file, int mode, loff_t offset,
 			loff_t len);
-extern void _trace_vfs(struct file *filp, char *op, u64 time);
 extern long do_sys_open(int dfd, const char __user *filename, int flags,
 			umode_t mode);
 extern struct file *file_open_name(struct filename *, int, umode_t);

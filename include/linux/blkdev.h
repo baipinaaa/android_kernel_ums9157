@@ -119,15 +119,6 @@ typedef __u32 __bitwise req_flags_t;
 #define RQF_MQ_POLL_SLEPT	((__force req_flags_t)(1 << 20))
 /* ->timeout has been called, don't expire again */
 #define RQF_TIMED_OUT		((__force req_flags_t)(1 << 21))
-/*
- * ioprio policy has moved this request's priority after it was merged;
- * whoever dispatches it has to look again.  The device kernel sets this
- * bit in blkcg_ioprio_track() (Image 0x88e4f0: `orr w8, w8, #0x400000`
- * on offset 0x1c of struct request).  Nothing in 5.4 reads it yet, so it
- * is currently write-only here -- kept so the code matches the device a
- * bit-for-bit instead of silently dropping the store.
- */
-#define RQF_ELV			((__force req_flags_t)(1 << 22))
 
 /* flags that prevent us from merging requests: */
 #define RQF_NOMERGE_FLAGS \
@@ -1176,9 +1167,6 @@ static inline unsigned short blk_rq_nr_discard_segments(struct request *rq)
 extern int blk_rq_map_sg(struct request_queue *, struct request *, struct scatterlist *);
 extern void blk_dump_rq_flags(struct request *, char *);
 extern long nr_blockdev_pages(void);
-#ifdef CONFIG_SPRD_SYSDUMP
-extern long nr_blockdev_pages_nolock(void);
-#endif
 
 bool __must_check blk_get_queue(struct request_queue *);
 struct request_queue *blk_alloc_queue(gfp_t);
@@ -1873,12 +1861,7 @@ static inline long nr_blockdev_pages(void)
 {
 	return 0;
 }
-#ifdef CONFIG_SPRD_SYSDUMP
-static inline long nr_blockdev_pages_nolock(void)
-{
-	return 0;
-}
-#endif
+
 struct blk_plug {
 };
 

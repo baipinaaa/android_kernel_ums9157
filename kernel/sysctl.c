@@ -1340,26 +1340,6 @@ static struct ctl_table vm_table[] = {
 		.extra1		= SYSCTL_ZERO,
 		.extra2		= &two,
 	},
-#ifdef CONFIG_SPECULATIVE_PAGE_FAULT
-	{
-		.procname	= "speculative_page_fault",
-		.data		= &sysctl_speculative_page_fault,
-		.maxlen		= sizeof(sysctl_speculative_page_fault),
-		.mode		= 0644,
-		.proc_handler	= proc_dointvec,
-	},
-#endif
-#ifdef CONFIG_SPRD_CMA_DEBUG
-	{
-		.procname	= "sprd_cma_debug",
-		.data		= &sysctl_sprd_cma_debug,
-		.maxlen		= sizeof(int),
-		.mode		= 0200, /* write-only */
-		.proc_handler	= sysctl_sprd_cma_debug_handler,
-		.extra1		= SYSCTL_ZERO,
-		.extra2		= &two,
-	},
-#endif
 	{
 		.procname	= "panic_on_oom",
 		.data		= &sysctl_panic_on_oom,

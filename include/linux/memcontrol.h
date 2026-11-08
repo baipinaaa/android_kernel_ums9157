@@ -334,16 +334,6 @@ struct mem_cgroup {
 	struct deferred_split deferred_split_queue;
 #endif
 
-#ifdef CONFIG_MEMCGV2_DECAYED_WATERMARK
-	/* protect the usage via percentage on watermark*/
-	u64 time_decay_fact;
-	u64 some_prop;
-	u64 full_prop;
-	u64 boost_prop;
-	u64 avg_next_update;
-	u64 avg_last_update;
-#endif
-
 	struct mem_cgroup_per_node *nodeinfo[0];
 	/* WARNING: nodeinfo must be the last member here */
 };
@@ -1332,21 +1322,6 @@ static inline void dec_lruvec_page_state(struct page *page,
 {
 	mod_lruvec_page_state(page, idx, -1);
 }
-
-#ifdef CONFIG_LRU_BALANCE_BASE_THRASHING
-static inline struct lruvec *parent_lruvec(struct lruvec *lruvec)
-{
-	struct mem_cgroup *memcg;
-
-	memcg = lruvec_memcg(lruvec);
-	if (!memcg)
-		return NULL;
-	memcg = parent_mem_cgroup(memcg);
-	if (!memcg)
-		return NULL;
-	return mem_cgroup_lruvec(lruvec_pgdat(lruvec), memcg);
-}
-#endif
 
 #ifdef CONFIG_CGROUP_WRITEBACK
 
