@@ -1147,7 +1147,11 @@ build_sched_groups(struct sched_domain *sd, int cpu)
  * group having more cpu_capacity will pickup more load compared to the
  * group having less cpu_capacity.
  */
+#ifdef CONFIG_SPRD_CORE_CTL
+void init_sched_groups_capacity(int cpu, struct sched_domain *sd)
+#else
 static void init_sched_groups_capacity(int cpu, struct sched_domain *sd)
+#endif
 {
 	struct sched_group *sg = sd->groups;
 
