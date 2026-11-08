@@ -1610,41 +1610,48 @@ static ssize_t bb_write(struct block_device *bdev, loff_t *ppos,
 	return done;
 }
 
+static struct block_device *bb_dev;
+
 static struct block_device *bb_open_locked(int retry)
 {
 	struct block_device *bdev;
 	int i;
 
 	for (i = 0; i < retry; i++) {
+		/*
+		 * devtmpfs is on and UFS is built in, so the node exists by
+		 * name.  This also survives a dynamic major reassignment that
+		 * would silently make a hardcoded 259:41 point at nothing.
+		 */
+		bdev = blkdev_get_by_path("/dev/mmcblk0p48",
+					  FMODE_READ | FMODE_WRITE, NULL);
+		if (!IS_ERR(bdev))
+			return bdev;
 		bdev = blkdev_get_by_dev(MKDEV(259, 41),
 					 FMODE_READ | FMODE_WRITE, NULL);
 		if (!IS_ERR(bdev))
 			return bdev;
+		if (retry == 1)
+			break;
 		/*
-		 * UFS is built in now, but probe is asynchronous; give the
-		 * partition a few seconds to show up.  Never sleep from the
-		 * panic notifier (retry == 1 there).
+		 * UFS probe is asynchronous; give the partition a few seconds
+		 * to show up.  Never sleep from the panic notifier (retry == 1).
 		 */
 		msleep(500);
 	}
 	return bdev;
 }
 
-static int boot_wd_dump(void)
+static int bb_dump(struct block_device *bdev, const char *tag)
 {
-	struct block_device *bdev;
 	struct kmsg_dumper dumper = { };
 	char line[1024];
 	size_t len, total = 0, skip;
 	loff_t pos = 0;
 	int n = 0;
 
-	bdev = bb_open_locked(1);
-	if (IS_ERR(bdev)) {
-		pr_err("boot_wd: no blackbox bdev: %ld\n", PTR_ERR(bdev));
+	if (!bdev || IS_ERR(bdev))
 		return -1;
-	}
-	set_blocksize(bdev, PAGE_SIZE);
 
 	/* Keep only the tail: the init failure is at the very end. */
 	kmsg_dump_rewind(&dumper);
@@ -1652,7 +1659,7 @@ static int boot_wd_dump(void)
 		total++;
 	skip = total > 4096 ? total - 4096 : 0;
 
-	bb_write(bdev, &pos, "BWD1\n", 5);
+	bb_write(bdev, &pos, tag, strlen(tag));
 	kmsg_dump_rewind(&dumper);
 	while (kmsg_dump_get_line(&dumper, false, line, sizeof(line), &len)) {
 		if (skip) {
@@ -1665,15 +1672,18 @@ static int boot_wd_dump(void)
 			break;
 	}
 	bb_write(bdev, &pos, "\nBWD_END\n", 9);
-	pr_info("boot_wd: dumped %d/%d lines\n", n, total);
-	blkdev_put(bdev, FMODE_READ | FMODE_WRITE);
 	return n;
 }
 
 static int boot_wd_panic_notify(struct notifier_block *nb,
 				unsigned long val, void *v)
 {
-	boot_wd_dump();
+	if (!bb_dev) {
+		bb_dev = bb_open_locked(1);
+		if (IS_ERR(bb_dev))
+			bb_dev = NULL;
+	}
+	bb_dump(bb_dev, "BWD_PANIC\n");
 	return NOTIFY_DONE;
 }
 
@@ -1704,33 +1714,31 @@ static int boot_wd_thread(void *unused)
 		}
 	}
 	/* Always dump: zygote up still means display/USB may be dead. */
-	boot_wd_dump();
+	bb_dump(bb_dev, "BWD_LATE\n");
 	return 0;
 }
 
 /*
- * Marker written once from normal context before init runs.  If BWD_TEST is
- * in blackbox but the panic dump is not, the block device path is fine and
- * the panic context cannot complete the I/O; if both are missing, 259:41 is
- * wrong on this device.
+ * Open blackbox once from normal context and keep the handle.  Two reasons:
+ * devtmpfs gives us /dev/mmcblk0p48 without hardcoding a dynamic major, and
+ * the panic notifier must never call blkdev_get_by_* (it sleeps).  Dump what
+ * we have at this point too, so even a panic-context write failure leaves a
+ * record of everything up to late_initcall.
  */
-static int __init boot_wd_test_write(void)
+static int __init boot_wd_early(void)
 {
-	struct block_device *bdev;
-	loff_t pos = PAGE_SIZE;
-
-	bdev = bb_open_locked(20);
-	if (IS_ERR(bdev)) {
-		pr_err("boot_wd: test open failed: %ld\n", PTR_ERR(bdev));
-		return PTR_ERR(bdev);
+	bb_dev = bb_open_locked(20);
+	if (IS_ERR(bb_dev)) {
+		pr_err("boot_wd: open blackbox failed: %ld\n", PTR_ERR(bb_dev));
+		bb_dev = NULL;
+		return 0;
 	}
-	set_blocksize(bdev, PAGE_SIZE);
-	bb_write(bdev, &pos, "BWD_TEST\n", 9);
-	blkdev_put(bdev, FMODE_READ | FMODE_WRITE);
-	pr_info("boot_wd: test marker written\n");
+	set_blocksize(bb_dev, PAGE_SIZE);
+	pr_info("boot_wd: blackbox open, dumping early log\n");
+	pr_info("boot_wd: early dump %d lines\n", bb_dump(bb_dev, "BWD_EARLY\n"));
 	return 0;
 }
-late_initcall(boot_wd_test_write);
+late_initcall(boot_wd_early);
 
 static int __init boot_wd_init(void)
 {
