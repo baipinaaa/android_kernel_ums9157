@@ -1,7 +1,5 @@
 /* SPDX-License-Identifier: GPL-2.0 WITH Linux-syscall-note */
-/*
- * Copyright (C) 2020 Unisoc Inc.
- */
+
 
 #ifndef _UAPI_VIDEO_GSP_R9P0_CFG_H_
 #define _UAPI_VIDEO_GSP_R9P0_CFG_H_
@@ -21,25 +19,25 @@
 #define GSP_R9P0_FREQ_512M 512000000
 #define GSP_R9P0_FREQ_614_4M 614400000
 
-/*Original: B3B2B1B0*/
+
 enum gsp_r9p0_word_endian {
-	GSP_R9P0_WORD_ENDN_0 = 0x00,	/*B3B2B1B0*/
-	GSP_R9P0_WORD_ENDN_1,		/*B0B1B2B3*/
-	GSP_R9P0_WORD_ENDN_2,		/*B1B0B3B2*/
-	GSP_R9P0_WORD_ENDN_3,		/*B2B3B0B1*/
+	GSP_R9P0_WORD_ENDN_0 = 0x00,	
+	GSP_R9P0_WORD_ENDN_1,		
+	GSP_R9P0_WORD_ENDN_2,		
+	GSP_R9P0_WORD_ENDN_3,		
 	GSP_R9P0_WORD_ENDN_MAX_NUM,
 };
 
 enum gsp_r9p0_dword_endian {
-	GSP_R9P0_DWORD_ENDN_0 = 0x00,	/*B7B6B5B4_B3B2B1B0*/
-	GSP_R9P0_DWORD_ENDN_1,		/*B3B2B1B0_B7B6B5B4*/
+	GSP_R9P0_DWORD_ENDN_0 = 0x00,	
+	GSP_R9P0_DWORD_ENDN_1,		
 	GSP_R9P0_DWORD_ENDN_MAX_NUM,
 };
 
 enum gsp_r9p0_qword_endian {
-	/*B15B14B13B12_B11B10B9B8_B7B6B5B4_B3B2B1B0*/
+	
 	GSP_R9P0_QWORD_ENDN_0 = 0x00,
-	/*B7B6B5B4_B3B2B1B0_B15B14B13B12_B11B10B9B8*/
+	
 	GSP_R9P0_QWORD_ENDN_1,
 	GSP_R9P0_QWORD_ENDN_MAX_NUM,
 };
@@ -69,7 +67,7 @@ enum gsp_r9p0_img_layer_format {
 	GSP_R9P0_IMG_FMT_YUV420_3P,
 	GSP_R9P0_IMG_FMT_RGB565,
 	GSP_R9P0_IMG_FMT_YV12,
-	GSP_R9P0_IMG_FMT_YCBCR_P010,
+	GSP_R9P0_IMG_FMT_YCBCR_P016,
 	GSP_R9P0_IMG_FMT_MAX_NUM,
 };
 
@@ -180,7 +178,7 @@ struct gsp_r9p0_des_layer_user {
 };
 
 struct gsp_r9p0_hdr10_cfg {
-	int video_range; /* 0: narrow range, 1: full range */
+	int video_range; 
 	int transfer_char;
 
 	int maxcll;
@@ -190,7 +188,7 @@ struct gsp_r9p0_hdr10_cfg {
 
 	int tone_map_en;
 	int sm_en;
-	int profile; /* 0: profile A; 1: profile B */
+	int profile; 
 
 	__u8 num_bezier_curve_anchors;
 	__u16 bezier_curve_anchors[15];
@@ -325,9 +323,9 @@ struct drm_gsp_r9p0_cfg_user {
 struct gsp_r9p0_capability {
 	struct gsp_capability common;
 	char board[32];
-	/* 1: means 1/16, 64 means 4*/
+	
 	__u32 scale_range_up;
-	/* 1: means 1/16, 64 means 4*/
+	
 	__u32 scale_range_down;
 	__u32 yuv_xywh_even;
 	__u32 max_video_size;
