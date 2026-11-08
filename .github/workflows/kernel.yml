@@ -23,7 +23,16 @@ jobs:
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y -qq bc bison flex libssl-dev libelf-dev \
-            clang lld llvm gcc-aarch64-linux-gnu binutils-aarch64-linux-gnu
+            clang-12 lld-12 llvm-12 gcc-aarch64-linux-gnu binutils-aarch64-linux-gnu
+          # 设备内核是 Android clang 12.0.5 (r416183b) 编的；Ubuntu jammy 的 clang-12 是
+          # 12.0.1，同一个大版本，代码生成比 clang 14 接近得多。make LLVM=1 只认不带
+          # 版本后缀的 clang/ld.lld/llvm-* 名字，所以把 12 的工具链软链到 PATH 最前面。
+          for t in clang clang++ ld.lld llvm-ar llvm-nm llvm-objcopy llvm-objdump llvm-readelf llvm-strip llvm-size; do
+            src=$(command -v "${t}-12" || true)
+            if [ -n "$src" ]; then sudo ln -sf "$src" "/usr/local/bin/$t"; fi
+          done
+          hash -r
+          echo "--- PATH clang: $(command -v clang)"
           echo "--- clang:"; clang --version | head -1
           echo "--- lld:";   ld.lld --version | head -1
           echo "--- llvm-ar:"; llvm-ar --version | head -1
@@ -56,10 +65,14 @@ jobs:
           # 模块加载/调用即崩 —— 这是「卡第一屏后重启」的真正原因（不是 vermagic）。
           make LLVM=1 ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- sprd_ums9157_defconfig 2>&1 | tee defconfig.log
           test -f .config
-          # 硬校验：这四项是本内核能加载设备原厂模块的前提
-          for c in CONFIG_CC_IS_CLANG CONFIG_LTO_CLANG CONFIG_CFI_CLANG CONFIG_SHADOW_CALL_STACK; do
+          # 硬校验：这几项是本内核与设备一致、且能加载设备原厂模块的前提
+          for c in CONFIG_CC_IS_CLANG CONFIG_LTO_CLANG CONFIG_CFI_CLANG CONFIG_SHADOW_CALL_STACK CONFIG_MODVERSIONS; do
             grep -q "^$c=y" .config || { echo "ERROR: $c 没有生效（工具链用错了？）"; exit 1; }
           done
+          # full LTO（不是 ThinLTO），与设备一致
+          grep -q "^# CONFIG_THINLTO is not set" .config || { echo "ERROR: THINLTO 仍然是 y"; exit 1; }
+          # 工具链大版本必须是 clang 12，否则说明软链没生效
+          grep -q "^CONFIG_CLANG_VERSION=1200" .config || { echo "ERROR: 不是 clang 12：$(grep CONFIG_CLANG_VERSION= .config)"; exit 1; }
           grep -E "^(CONFIG_CC_IS|CONFIG_LTO|CONFIG_CFI|CONFIG_SHADOW_CALL|CONFIG_CLANG_VERSION|CONFIG_LLD_VERSION)" .config
 
       - name: 编译 Image（-k 一次收集全部错误）
