@@ -91,7 +91,7 @@ jobs:
             grep -q "^$c=y" .config || { echo "ERROR: $c 没有生效（工具链用错了？）"; exit 1; }
           done
           # full LTO（不是 ThinLTO），与设备一致
-          grep -q "^# CONFIG_THINLTO is not set" .config || { echo "ERROR: THINLTO 仍然是 y"; exit 1; }
+          grep -q "^CONFIG_THINLTO=y" .config || { echo "ERROR: THINLTO 未开启（设备是 full LTO，但我们用 ThinLTO，16G runner 编不动 full）"; exit 1; }
           # 工具链必须是 Android clang 12.0.5，否则说明下载/ PATH 没生效
           grep -q "^CONFIG_CLANG_VERSION=120005" .config || { echo "ERROR: 不是 clang 12.0.5：$(grep CONFIG_CLANG_VERSION= .config)"; exit 1; }
           grep -q '^CONFIG_CC_VERSION_TEXT="Android' .config || { echo "ERROR: 不是 Android clang：$(grep CONFIG_CC_VERSION_TEXT= .config)"; exit 1; }
