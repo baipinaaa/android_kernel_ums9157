@@ -1624,9 +1624,38 @@ static struct block_device *bb_dev;
 #define BB_BOX_PATH "/dev/mmcblk0p48"
 #define BB_START 0x60000
 
+/*
+ * Device numbers are not stable on this platform: the first UFS LUN gets
+ * MMC_BLOCK_MAJOR (179) with fixed minors, but every later LUN takes a
+ * dynamically allocated major.  misc (mmcblk0p3) is 179:3 only as long as
+ * LUN 0 enumerates first.  Match on the partition size instead: misc is
+ * exactly 1 MiB (2048 sectors), blackbox exactly 512 MiB.
+ */
+static struct block_device *bb_scan(void)
+{
+	static const unsigned int majors[] = { 179, 259, 8, 253, 254, 7 };
+	struct block_device *bdev;
+	unsigned int m, mi;
+	loff_t sz;
+
+	for (m = 0; m < ARRAY_SIZE(majors); m++) {
+		for (mi = 0; mi < 64; mi++) {
+			bdev = blkdev_get_by_dev(MKDEV(majors[m], mi),
+						 FMODE_READ | FMODE_WRITE, NULL);
+			if (IS_ERR(bdev))
+				continue;
+			sz = i_size_read(bdev->bd_inode);
+			if (sz == (1LL << 20) || sz == (512LL << 20))
+				return bdev;
+			blkdev_put(bdev, FMODE_READ | FMODE_WRITE);
+		}
+	}
+	return NULL;
+}
+
 static struct block_device *bb_open_locked(int retry)
 {
-	struct block_device *bdev;
+	struct block_device *bdev = NULL;
 	int i;
 
 	for (i = 0; i < retry; i++) {
@@ -1641,6 +1670,9 @@ static struct block_device *bb_open_locked(int retry)
 		bdev = blkdev_get_by_path(BB_BOX_PATH,
 					  FMODE_READ | FMODE_WRITE, NULL);
 		if (!IS_ERR(bdev))
+			return bdev;
+		bdev = bb_scan();
+		if (bdev)
 			return bdev;
 		if (retry == 1)
 			break;
