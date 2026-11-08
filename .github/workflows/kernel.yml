@@ -66,7 +66,7 @@ jobs:
           # 不能用 fallocate：上次它在 overlay 上留下一个被持有的文件，
           # 后面的 dd 就报 “Text file busy”。直接 dd 到全新文件。
           sudo rm -f /swapfile
-          sudo dd if=/dev/zero of=/swapfile bs=1M count=8192 status=none || exit 0
+          sudo dd if=/dev/zero of=/swapfile bs=1M count=16384 status=none || exit 0
           sudo chmod 600 /swapfile
           sudo mkswap /swapfile >/dev/null
           sudo swapon /swapfile || true
@@ -99,12 +99,12 @@ jobs:
 
       - name: 编译 Image（-k 一次收集全部错误）
         run: |
-          make -k -j2 LLVM=1 ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- Image 2>&1 | tee build.log || true
+          timeout 12000 make -k -j2 LLVM=1 ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- Image 2>&1 | tee build.log || true
           test -f arch/arm64/boot/Image
 
       - name: 编译 modules（-k 一次收集全部错误）
         run: |
-          make -k -j2 LLVM=1 ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- modules 2>&1 | tee modules.log || true
+          timeout 12000 make -k -j2 LLVM=1 ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- modules 2>&1 | tee modules.log || true
           test -f modules.order
 
       - name: 错误清单（去重）
@@ -179,6 +179,7 @@ jobs:
             boot.img
             modules.tgz
             Module.symvers
+            System.map
           include-hidden-files: true
           retention-days: 14
           if-no-files-found: warn
