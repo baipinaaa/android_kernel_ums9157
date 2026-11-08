@@ -1,8 +1,8 @@
 name: kernel-build
 
 on:
-  push:
-    branches: [ master ]
+  # 只允许手动触发：Actions 页面 → kernel-build → Run workflow。
+  # 之前是 push 即编译，一次推送就跑 2 小时，full LTO 更是烧额度。
   workflow_dispatch:
 
 jobs:
