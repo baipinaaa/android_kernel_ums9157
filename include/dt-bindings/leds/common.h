@@ -1,26 +1,19 @@
 /* SPDX-License-Identifier: GPL-2.0 */
-/*
- * This header provides macros for the common LEDs device tree bindings.
- *
- * Copyright (C) 2015, Samsung Electronics Co., Ltd.
- * Author: Jacek Anaszewski <j.anaszewski@samsung.com>
- *
- * Copyright (C) 2019 Jacek Anaszewski <jacek.anaszewski@gmail.com>
- */
+
 
 #ifndef __DT_BINDINGS_LEDS_H
 #define __DT_BINDINGS_LEDS_H
 
-/* External trigger type */
+
 #define LEDS_TRIG_TYPE_EDGE	0
 #define LEDS_TRIG_TYPE_LEVEL	1
 
-/* Boost modes */
+
 #define LEDS_BOOST_OFF		0
 #define LEDS_BOOST_ADAPTIVE	1
 #define LEDS_BOOST_FIXED	2
 
-/* Standard LED colors */
+
 #define LED_COLOR_ID_WHITE	0
 #define LED_COLOR_ID_RED	1
 #define LED_COLOR_ID_GREEN	2
@@ -31,7 +24,7 @@
 #define LED_COLOR_ID_IR		7
 #define LED_COLOR_ID_MAX	8
 
-/* Standard LED functions */
+
 #define LED_FUNCTION_ACTIVITY "activity"
 #define LED_FUNCTION_ALARM "alarm"
 #define LED_FUNCTION_BACKLIGHT "backlight"
@@ -58,11 +51,6 @@
 #define LED_FUNCTION_MUTE "mute"
 #define LED_FUNCTION_NUMLOCK "numlock"
 #define LED_FUNCTION_PANIC "panic"
-#define LED_FUNCTION_PLAYER1 "player-1"
-#define LED_FUNCTION_PLAYER2 "player-2"
-#define LED_FUNCTION_PLAYER3 "player-3"
-#define LED_FUNCTION_PLAYER4 "player-4"
-#define LED_FUNCTION_PLAYER5 "player-5"
 #define LED_FUNCTION_PROGRAMMING "programming"
 #define LED_FUNCTION_POWER "power"
 #define LED_FUNCTION_RX "rx"
@@ -77,4 +65,4 @@
 #define LED_FUNCTION_WLAN "wlan"
 #define LED_FUNCTION_WPS "wps"
 
-#endif /* __DT_BINDINGS_LEDS_H */
+#endif 

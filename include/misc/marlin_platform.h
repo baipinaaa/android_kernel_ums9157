@@ -1,21 +1,4 @@
-/*
- * Copyright (C) 2016 Spreadtrum Communications Inc.
- *
- * Filename : marlin.h
- * Abstract : This file is a implementation for driver of marlin2
- *
- * Authors	: yufeng.yang
- *
- *
- * This software is licensed under the terms of the GNU General Public
- * License version 2, as published by the Free Software Foundation, and
- * may be copied, distributed, and modified under those terms.
 
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- */
 #ifndef __MARLIN_H__
 #define __MARLIN_H__
 
@@ -25,14 +8,14 @@
 #define FALSE								(0)
 #define TRUE								(1)
 
-/* sync with wcn_get_chip_type() and wcn_chip_name */
+
 enum wcn_chip_id_type {
 	WCN_CHIP_ID_INVALID,
 	WCN_CHIP_ID_AA,
 	WCN_CHIP_ID_AB,
 	WCN_CHIP_ID_AC,
 	WCN_CHIP_ID_AD,
-	/* WCN_CHIP_ID_MAX is the last one */
+	
 	WCN_CHIP_ID_MAX,
 };
 
@@ -76,6 +59,7 @@ int cali_ini_need_download(enum wcn_sub_sys subsys);
 const char *strno(enum wcn_sub_sys subsys);
 void wcn_chip_power_on(void);
 void wcn_chip_power_off(void);
+void wcn_reset_pcie(void);
 void mdbg_assert_interface(char *str);
 char *gnss_firmware_path_get(void);
 

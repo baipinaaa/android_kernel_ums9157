@@ -35,7 +35,7 @@ enum wcn_sub_sys {
 	MARLIN_SDIO_RX,
 	MARLIN_MDBG,
 	MARLIN_GNSS,
-	WCN_AUTO,	/* fist GPS, then btwififm */
+	WCN_AUTO,	
 	MARLIN_ALL,
 };
 
@@ -57,18 +57,18 @@ enum wcn_source_type {
 	WCN_SOURCE_BTWF,
 	WCN_SOURCE_GNSS,
 	WCN_SOURCE_WCN,
-	WCN_SOURCE_CP2_ALIVE  /*notify slogmodem wcn cp2 alive*/
+	WCN_SOURCE_CP2_ALIVE  
 };
 
 enum wcn_bus_state {
-	WCN_BUS_DOWN,	/* Not ready for frame transfers */
-	WCN_BUS_UP		/* Ready for frame transfers */
+	WCN_BUS_DOWN,	
+	WCN_BUS_UP		
 };
 
 enum wcn_bus_pm_state {
-	BUS_PM_DISABLE = 1,	/* Disable ASPM */
-	BUS_PM_L0s_L1_ENABLE,	/* Enable ASPM L0s/L1 */
-	BUS_PM_ALL_ENABLE	/* Enalbe Everything(e.g. L0s/L1/L1.1/L1.2) */
+	BUS_PM_DISABLE = 1,	
+	BUS_PM_L0s_L1_ENABLE,	
+	BUS_PM_ALL_ENABLE	
 };
 
 enum sub_sys {
@@ -128,11 +128,11 @@ struct wcn_sipc_chn_sblk {
 	u32     mapped_smem_base;
 };
 
-/* 1 for sblock_create or sbuf_create */
+
 #define WCN_CHN_CREATE 0x1
-/* for chn rx */
+
 #define WCN_CHN_CALLBACK 0x2
-/* for alloc channel index dynamicly */
+
 #define WCN_CHN_DYNAMIC 0x4
 #define WCN_CHN_REGISTER_HANDLE 0x4
 
@@ -141,7 +141,7 @@ struct wcn_sipc_chn_info {
 	u8 channel;
 	int index;
 	enum wcn_sipc_trans_type type;
-	/* 1 for sbuf or swcnblk created already */
+	
 	unsigned int flag;
 	unsigned char name[24];
 	union {
@@ -159,7 +159,7 @@ union wcn_chn_config {
 #define SIPC_TYPE_SBUF	0
 #define SIPC_TYPE_SBLOCK	1
 
-/* if flag is 1, txblocknum, txblocknum, rxblocknum, rxblocksize is not used */
+
 #define WCN_INIT_SIPC_SBUF(_dst, _channel, _flag, _name, \
 			   _bufid, _len, _num, _txblocksize, _rxblocksize) \
 { \
@@ -196,42 +196,39 @@ union wcn_chn_config {
 }
 
 struct mchn_ops_t {
-	/* hardware interface type */
+	
 	enum wcn_hard_intf_type hif_type;
-	/* channel index for wf/bt/fm */
+	
 	int channel;
 
-	/* WCN_SIPC channel config paras */
+	
 	union wcn_chn_config chn_config;
 
-	/* inout=1 tx side, inout=0 rx side */
+	
 	int inout;
-	/* set callback pop_link/push_link frequency */
+	
 	int intr_interval;
-	/* data buffer size */
+	
 	int buf_size;
-	/* mbuf pool size */
+	
 	int pool_size;
-	/* The large number of trans */
+	
 	int once_max_trans;
-	/* rx side threshold */
+	
 	int rx_threshold;
-	/* tx timeout */
+	
 	int timeout;
-	/* callback in top tophalf */
+	
 	int cb_in_irq;
-	/* pending link num */
+	
 	int max_pending;
-	/*
-	 * pop link list, (1)chn id, (2)mbuf link head
-	 * (3) mbuf link tail (4)number of node
-	 */
+	
 	int (*pop_link)(int chn, struct mbuf_t *head,
 			struct mbuf_t *tail, int num);
-	/* ap don't need to implementation */
+	
 	int (*push_link)(int chn, struct mbuf_t **head,
 			 struct mbuf_t **tail, int *num);
-	/* (1)channel id (2)trans time, -1 express timeout */
+	
 	int (*tx_complete)(int chn, int timeout);
 	int (*power_notify)(int chn, int notify);
 };
@@ -243,7 +240,7 @@ struct bus_puh_t {
 	unsigned int eof:1;
 	unsigned int subtype:4;
 	unsigned int type:4;
-}; /* 32bits public header */
+}; 
 
 struct sprdwcn_bus_ops {
 	int (*preinit)(void);
@@ -255,27 +252,19 @@ struct sprdwcn_bus_ops {
 	enum wcn_hard_intf_type (*get_hwintf_type)(void);
 	int (*get_bus_status)(void);
 
-	/*
-	 * For sdio:
-	 * list_alloc and list_free only tx available.
-	 * TX: module manage buf, RX: SDIO unified manage buf
-	 */
+	
 	int (*list_alloc)(int chn, struct mbuf_t **head,
 			  struct mbuf_t **tail, int *num);
 	int (*list_free)(int chn, struct mbuf_t *head,
 			 struct mbuf_t *tail, int num);
 
-	/* For sdio: TX(send data) and RX(give back list to SDIO) */
+	
 	int (*push_list)(int chn, struct mbuf_t *head,
 			 struct mbuf_t *tail, int num);
 	int (*push_list_direct)(int chn, struct mbuf_t *head,
 			 struct mbuf_t *tail, int num);
 
-	/*
-	 * for pcie
-	 * push link list, Using a blocking mode,
-	 * Timeout wait for tx_complete
-	 */
+	
 	int (*push_link_wait_complete)(int chn, struct mbuf_t *head,
 				       struct mbuf_t *tail, int num,
 				       int timeout);
@@ -299,13 +288,14 @@ struct sprdwcn_bus_ops {
 	void (*set_carddump_status)(unsigned int flag);
 	unsigned long long (*get_rx_total_cnt)(void);
 
-	/* for runtime */
+	
 	int (*runtime_get)(void);
 	int (*runtime_put)(void);
 
 	int (*rescan)(void *wcn_dev);
 	void (*register_rescan_cb)(void *);
 	void (*remove_card)(void *wcn_dev);
+	void (*reset)(void *wcn_dev);
 
 	int (*register_pt_rx_process)(unsigned int type,
 				unsigned int subtype, void *func);
@@ -318,7 +308,7 @@ struct sprdwcn_bus_ops {
 	int (*driver_register)(void);
 	void (*driver_unregister)(void);
 
-	/* for wcn chip boot and download firmware */
+	
 	int (*start_wcn)(enum wcn_sub_sys subsys);
 	int (*stop_wcn)(enum wcn_sub_sys subsys);
 	void (*debug_point_show)(void);
@@ -326,6 +316,7 @@ struct sprdwcn_bus_ops {
 };
 
 extern struct atomic_notifier_head wcn_reset_notifier_list;
+extern struct atomic_notifier_head modem_n79_notifier_list;
 
 extern void module_bus_init(void);
 extern void module_bus_deinit(void);
@@ -578,7 +569,7 @@ enum wcn_bus_pm_state sprdwcn_bus_get_pm_policy(void)
 {
 	struct sprdwcn_bus_ops *bus_ops = get_wcn_bus_ops();
 
-	if (!bus_ops || !bus_ops->writebyte)
+	if (!bus_ops || !bus_ops->get_pm_policy)
 		return 0;
 
 	return bus_ops->get_pm_policy();
@@ -589,7 +580,7 @@ int sprdwcn_bus_set_pm_policy(enum sub_sys subsys, enum wcn_bus_pm_state state)
 {
 	struct sprdwcn_bus_ops *bus_ops = get_wcn_bus_ops();
 
-	if (!bus_ops || !bus_ops->writebyte)
+	if (!bus_ops || !bus_ops->set_pm_policy)
 		return 0;
 
 	return bus_ops->set_pm_policy(subsys, state);
@@ -670,6 +661,17 @@ void sprdwcn_bus_register_rescan_cb(void *func)
 		return;
 
 	bus_ops->register_rescan_cb(func);
+}
+
+static inline
+void sprdwcn_bus_reset(void *wcn_dev)
+{
+	struct sprdwcn_bus_ops *bus_ops = get_wcn_bus_ops();
+
+	if (!bus_ops || !bus_ops->reset)
+		return;
+
+	bus_ops->reset(wcn_dev);
 }
 
 static inline
