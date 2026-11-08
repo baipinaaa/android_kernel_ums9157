@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-2.0 */
-/* Freezer declarations */
+
 
 #ifndef FREEZER_H_INCLUDED
 #define FREEZER_H_INCLUDED
@@ -10,18 +10,14 @@
 #include <linux/atomic.h>
 
 #ifdef CONFIG_FREEZER
-extern atomic_t system_freezing_cnt;	/* nr of freezing conds in effect */
-extern bool pm_freezing;		/* PM freezing in effect */
-extern bool pm_nosig_freezing;		/* PM nosig freezing in effect */
+extern atomic_t system_freezing_cnt;	
+extern bool pm_freezing;		
+extern bool pm_nosig_freezing;		
 
-/*
- * Timeout for stopping processes
- */
+
 extern unsigned int freeze_timeout_msecs;
 
-/*
- * Check if a process has been frozen
- */
+
 static inline bool frozen(struct task_struct *p)
 {
 	return p->flags & PF_FROZEN;
@@ -29,9 +25,7 @@ static inline bool frozen(struct task_struct *p)
 
 extern bool freezing_slow_path(struct task_struct *p);
 
-/*
- * Check if there is a request to freeze a process
- */
+
 static inline bool freezing(struct task_struct *p)
 {
 	if (likely(!atomic_read(&system_freezing_cnt)))
@@ -39,7 +33,7 @@ static inline bool freezing(struct task_struct *p)
 	return freezing_slow_path(p);
 }
 
-/* Takes and releases task alloc lock using task_lock() */
+
 extern void __thaw_task(struct task_struct *t);
 
 extern bool __refrigerator(bool check_kthr_stop);
@@ -48,10 +42,7 @@ extern int freeze_kernel_threads(void);
 extern void thaw_processes(void);
 extern void thaw_kernel_threads(void);
 
-/*
- * DO NOT ADD ANY NEW CALLERS OF THIS FUNCTION
- * If try_to_freeze causes a lockdep warning it means the caller may deadlock
- */
+
 static inline bool try_to_freeze_unsafe(void)
 {
 	might_sleep();
@@ -72,71 +63,32 @@ extern bool set_freezable(void);
 
 #ifdef CONFIG_CGROUP_FREEZER
 extern bool cgroup_freezing(struct task_struct *task);
-#else /* !CONFIG_CGROUP_FREEZER */
+#else 
 static inline bool cgroup_freezing(struct task_struct *task)
 {
 	return false;
 }
-#endif /* !CONFIG_CGROUP_FREEZER */
-
-/* ZSW_ADD FOR CPUFREEZER begin */
-extern void cgroup_network_unfreeze(unsigned int uid);
-extern void cgroup_signal_unfreeze(struct task_struct *task);
-extern void cgroup_binder_unfreeze(struct task_struct *task);
-extern bool cgroup_needunfreeze_task(struct task_struct *task);
-extern bool cgroup_needunfreeze_uid(unsigned int uid);
-/* ZSW_ADD FOR CPUFREEZER end */
-
-/*
- * The PF_FREEZER_SKIP flag should be set by a vfork parent right before it
- * calls wait_for_completion(&vfork) and reset right after it returns from this
- * function.  Next, the parent should call try_to_freeze() to freeze itself
- * appropriately in case the child has exited before the freezing of tasks is
- * complete.  However, we don't want kernel threads to be frozen in unexpected
- * places, so we allow them to block freeze_processes() instead or to set
- * PF_NOFREEZE if needed. Fortunately, in the ____call_usermodehelper() case the
- * parent won't really block freeze_processes(), since ____call_usermodehelper()
- * (the child) does a little before exec/exit and it can't be frozen before
- * waking up the parent.
- */
+#endif 
 
 
-/**
- * freezer_do_not_count - tell freezer to ignore %current
- *
- * Tell freezers to ignore the current task when determining whether the
- * target frozen state is reached.  IOW, the current task will be
- * considered frozen enough by freezers.
- *
- * The caller shouldn't do anything which isn't allowed for a frozen task
- * until freezer_cont() is called.  Usually, freezer[_do_not]_count() pair
- * wrap a scheduling operation and nothing much else.
- */
+
+
+
 static inline void freezer_do_not_count(void)
 {
 	current->flags |= PF_FREEZER_SKIP;
 }
 
-/**
- * freezer_count - tell freezer to stop ignoring %current
- *
- * Undo freezer_do_not_count().  It tells freezers that %current should be
- * considered again and tries to freeze if freezing condition is already in
- * effect.
- */
+
 static inline void freezer_count(void)
 {
 	current->flags &= ~PF_FREEZER_SKIP;
-	/*
-	 * If freezing is in progress, the following paired with smp_mb()
-	 * in freezer_should_skip() ensures that either we see %true
-	 * freezing() or freezer_should_skip() sees !PF_FREEZER_SKIP.
-	 */
+	
 	smp_mb();
 	try_to_freeze();
 }
 
-/* DO NOT ADD ANY NEW CALLERS OF THIS FUNCTION */
+
 static inline void freezer_count_unsafe(void)
 {
 	current->flags &= ~PF_FREEZER_SKIP;
@@ -144,36 +96,17 @@ static inline void freezer_count_unsafe(void)
 	try_to_freeze_unsafe();
 }
 
-/**
- * freezer_should_skip - whether to skip a task when determining frozen
- *			 state is reached
- * @p: task in quesion
- *
- * This function is used by freezers after establishing %true freezing() to
- * test whether a task should be skipped when determining the target frozen
- * state is reached.  IOW, if this function returns %true, @p is considered
- * frozen enough.
- */
+
 static inline bool freezer_should_skip(struct task_struct *p)
 {
-	/*
-	 * The following smp_mb() paired with the one in freezer_count()
-	 * ensures that either freezer_count() sees %true freezing() or we
-	 * see cleared %PF_FREEZER_SKIP and return %false.  This makes it
-	 * impossible for a task to slip frozen state testing after
-	 * clearing %PF_FREEZER_SKIP.
-	 */
+	
 	smp_mb();
 	return p->flags & PF_FREEZER_SKIP;
 }
 
-/*
- * These functions are intended to be used whenever you want allow a sleeping
- * task to be frozen. Note that neither return any clear indication of
- * whether a freeze event happened while in this function.
- */
 
-/* Like schedule(), but should not block the freezer. */
+
+
 static inline void freezable_schedule(void)
 {
 	freezer_do_not_count();
@@ -181,7 +114,7 @@ static inline void freezable_schedule(void)
 	freezer_count();
 }
 
-/* DO NOT ADD ANY NEW CALLERS OF THIS FUNCTION */
+
 static inline void freezable_schedule_unsafe(void)
 {
 	freezer_do_not_count();
@@ -189,10 +122,7 @@ static inline void freezable_schedule_unsafe(void)
 	freezer_count_unsafe();
 }
 
-/*
- * Like schedule_timeout(), but should not block the freezer.  Do not
- * call this with locks held.
- */
+
 static inline long freezable_schedule_timeout(long timeout)
 {
 	long __retval;
@@ -202,10 +132,7 @@ static inline long freezable_schedule_timeout(long timeout)
 	return __retval;
 }
 
-/*
- * Like schedule_timeout_interruptible(), but should not block the freezer.  Do not
- * call this with locks held.
- */
+
 static inline long freezable_schedule_timeout_interruptible(long timeout)
 {
 	long __retval;
@@ -215,7 +142,7 @@ static inline long freezable_schedule_timeout_interruptible(long timeout)
 	return __retval;
 }
 
-/* Like schedule_timeout_killable(), but should not block the freezer. */
+
 static inline long freezable_schedule_timeout_killable(long timeout)
 {
 	long __retval;
@@ -225,7 +152,7 @@ static inline long freezable_schedule_timeout_killable(long timeout)
 	return __retval;
 }
 
-/* DO NOT ADD ANY NEW CALLERS OF THIS FUNCTION */
+
 static inline long freezable_schedule_timeout_killable_unsafe(long timeout)
 {
 	long __retval;
@@ -235,10 +162,7 @@ static inline long freezable_schedule_timeout_killable_unsafe(long timeout)
 	return __retval;
 }
 
-/*
- * Like schedule_hrtimeout_range(), but should not block the freezer.  Do not
- * call this with locks held.
- */
+
 static inline int freezable_schedule_hrtimeout_range(ktime_t *expires,
 		u64 delta, const enum hrtimer_mode mode)
 {
@@ -249,13 +173,9 @@ static inline int freezable_schedule_hrtimeout_range(ktime_t *expires,
 	return __retval;
 }
 
-/*
- * Freezer-friendly wrappers around wait_event_interruptible(),
- * wait_event_killable() and wait_event_interruptible_timeout(), originally
- * defined in <linux/wait.h>
- */
 
-/* DO NOT ADD ANY NEW CALLERS OF THIS FUNCTION */
+
+
 #define wait_event_freezekillable_unsafe(wq, condition)			\
 ({									\
 	int __retval;							\
@@ -264,11 +184,8 @@ static inline int freezable_schedule_hrtimeout_range(ktime_t *expires,
 	freezer_count_unsafe();						\
 	__retval;							\
 })
-/**** ZSW_ADD FOR CPUFREEZER begin ****/
-void acquire_freezer_lock(void);
-void release_freezer_lock(void);
-/**** ZSW_ADD FOR CPUFREEZER end ****/
-#else /* !CONFIG_FREEZER */
+
+#else 
 static inline bool frozen(struct task_struct *p) { return false; }
 static inline bool freezing(struct task_struct *p) { return false; }
 static inline void __thaw_task(struct task_struct *t) {}
@@ -308,10 +225,6 @@ static inline void set_freezable(void) {}
 #define wait_event_freezekillable_unsafe(wq, condition)			\
 		wait_event_killable(wq, condition)
 
-/**** ZSW_ADD FOR CPUFREEZER begin ****/
-void acquire_freezer_lock(void) {}
-void release_freezer_lock(void) {}
-/**** ZSW_ADD FOR CPUFREEZER end ****/
-#endif /* !CONFIG_FREEZER */
+#endif 
 
-#endif	/* FREEZER_H_INCLUDED */
+#endif	

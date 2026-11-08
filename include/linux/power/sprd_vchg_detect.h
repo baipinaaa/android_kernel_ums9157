@@ -1,12 +1,5 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
-/*
- * Copyright (C) 2011 Unisoc Co., Ltd.
- * Jinfeng.lin <Jinfeng.Lin1@unisoc.com>
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 as
- * published by the Free Software Foundation.
- */
+
 
 #ifndef _SPRD_VCHG_DETECT_H
 #define _SPRD_VCHG_DETECT_H
@@ -28,7 +21,7 @@
 
 struct sprd_vchg_info {
 	struct device *dev;
-	/* receive vchg event */
+	
 	struct usb_phy *usb_phy;
 	struct notifier_block usb_notify;
 	struct extcon_dev *pd_extcon;
@@ -46,6 +39,9 @@ struct sprd_vchg_info {
 	bool typec_online;
 	u32 limit;
 	int pd_extcon_status;
+	bool is_sink;
+	bool use_typec_extcon;
+	int charger_type_cnt;
 };
 
 struct sprd_vchg_ops {
@@ -61,5 +57,5 @@ struct sprd_vchg_ops {
 
 struct sprd_vchg_info *sprd_vchg_info_register(struct device *dev);
 
-#endif /* _SPRD_VCHG_DETECT_H */
+#endif 
 

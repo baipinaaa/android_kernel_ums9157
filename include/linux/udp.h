@@ -1,15 +1,5 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later */
-/*
- * INET		An implementation of the TCP/IP protocol suite for the LINUX
- *		operating system.  INET is implemented using the  BSD Socket
- *		interface as the means of communication with the user level.
- *
- *		Definitions for the UDP protocol.
- *
- * Version:	@(#)udp.h	1.0.2	04/28/93
- *
- * Author:	Fred N. van Kempen, <waltje@uWalt.NL.Mugnet.ORG>
- */
+
 #ifndef _LINUX_UDP_H
 #define _LINUX_UDP_H
 
@@ -36,49 +26,38 @@ static inline u32 udp_hashfn(const struct net *net, u32 num, u32 mask)
 }
 
 struct udp_sock {
-	/* inet_sock has to be the first member */
+	
 	struct inet_sock inet;
 #define udp_port_hash		inet.sk.__sk_common.skc_u16hashes[0]
 #define udp_portaddr_hash	inet.sk.__sk_common.skc_u16hashes[1]
 #define udp_portaddr_node	inet.sk.__sk_common.skc_portaddr_node
-	int		 pending;	/* Any pending frames ? */
-	unsigned int	 corkflag;	/* Cork is required */
-	__u8		 encap_type;	/* Is this an Encapsulation socket? */
-	unsigned char	 no_check6_tx:1,/* Send zero UDP6 checksums on TX? */
-			 no_check6_rx:1,/* Allow zero UDP6 checksums on RX? */
-			 encap_enabled:1, /* This socket enabled encap
-					   * processing; UDP tunnels and
-					   * different encapsulation layer set
-					   * this
-					   */
-			 gro_enabled:1,	/* Request GRO aggregation */
+	int		 pending;	
+	unsigned int	 corkflag;	
+	__u8		 encap_type;	
+	unsigned char	 no_check6_tx:1,
+			 no_check6_rx:1,
+			 encap_enabled:1, 
+			 gro_enabled:1,	
 			 accept_udp_l4:1,
 			 accept_udp_fraglist:1;
-	/*
-	 * Following member retains the information to create a UDP header
-	 * when the socket is uncorked.
-	 */
-	__u16		 len;		/* total length of pending frames */
+	
+	__u16		 len;		
 	__u16		 gso_size;
-	/*
-	 * Fields specific to UDP-Lite.
-	 */
+	
 	__u16		 pcslen;
 	__u16		 pcrlen;
-/* indicator bits used by pcflag: */
-#define UDPLITE_BIT      0x1  		/* set by udplite proto init function */
-#define UDPLITE_SEND_CC  0x2  		/* set via udplite setsockopt         */
-#define UDPLITE_RECV_CC  0x4		/* set via udplite setsocktopt        */
-	__u8		 pcflag;        /* marks socket as UDP-Lite if > 0    */
+
+#define UDPLITE_BIT      0x1  		
+#define UDPLITE_SEND_CC  0x2  		
+#define UDPLITE_RECV_CC  0x4		
+	__u8		 pcflag;        
 	__u8		 unused[3];
-	/*
-	 * For encapsulation sockets.
-	 */
+	
 	int (*encap_rcv)(struct sock *sk, struct sk_buff *skb);
 	int (*encap_err_lookup)(struct sock *sk, struct sk_buff *skb);
 	void (*encap_destroy)(struct sock *sk);
 
-	/* GRO functions for UDP socket */
+	
 	struct sk_buff *	(*gro_receive)(struct sock *sk,
 					       struct list_head *head,
 					       struct sk_buff *skb);
@@ -86,10 +65,10 @@ struct udp_sock {
 						struct sk_buff *skb,
 						int nhoff);
 
-	/* udp_recvmsg try to use this before splicing sk_receive_queue */
+	
 	struct sk_buff_head	reader_queue ____cacheline_aligned_in_smp;
 
-	/* This field is dirtied by udp_recvmsg() */
+	
 	int		forward_deficit;
 };
 
@@ -131,24 +110,6 @@ static inline void udp_cmsg_recv(struct msghdr *msg, struct sock *sk,
 	}
 }
 
-DECLARE_STATIC_KEY_FALSE(udp_encap_needed_key);
-#if IS_ENABLED(CONFIG_IPV6)
-DECLARE_STATIC_KEY_FALSE(udpv6_encap_needed_key);
-#endif
-
-static inline bool udp_encap_needed(void)
-{
-	if (static_branch_unlikely(&udp_encap_needed_key))
-		return true;
-
-#if IS_ENABLED(CONFIG_IPV6)
-	if (static_branch_unlikely(&udpv6_encap_needed_key))
-		return true;
-#endif
-
-	return false;
-}
-
 static inline bool udp_unexpected_gso(struct sock *sk, struct sk_buff *skb)
 {
 	if (!skb_is_gso(skb))
@@ -158,16 +119,6 @@ static inline bool udp_unexpected_gso(struct sock *sk, struct sk_buff *skb)
 		return true;
 
 	if (skb_shinfo(skb)->gso_type & SKB_GSO_FRAGLIST && !udp_sk(sk)->accept_udp_fraglist)
-		return true;
-
-	/* GSO packets lacking the SKB_GSO_UDP_TUNNEL/_CSUM bits might still
-	 * land in a tunnel as the socket check in udp_gro_receive cannot be
-	 * foolproof.
-	 */
-	if (udp_encap_needed() &&
-	    READ_ONCE(udp_sk(sk)->encap_rcv) &&
-	    !(skb_shinfo(skb)->gso_type &
-	      (SKB_GSO_UDP_TUNNEL | SKB_GSO_UDP_TUNNEL_CSUM)))
 		return true;
 
 	return false;
@@ -181,4 +132,4 @@ static inline bool udp_unexpected_gso(struct sock *sk, struct sk_buff *skb)
 
 #define IS_UDPLITE(__sk) (__sk->sk_protocol == IPPROTO_UDPLITE)
 
-#endif	/* _LINUX_UDP_H */
+#endif	

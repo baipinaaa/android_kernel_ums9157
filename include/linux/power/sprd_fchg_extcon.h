@@ -1,11 +1,4 @@
-/*
- * Copyright (C) 2011 Unisoc Co., Ltd.
- * Youxu.Zeng <Youxu.Zeng@unisoc.com>
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 as
- * published by the Free Software Foundation.
- */
+
 
 #ifndef _SPRD_FCHG_EXTCON_H
 #define _SPRD_FCHG_EXTCON_H
@@ -24,7 +17,7 @@
 #include <linux/usb/sprd_tcpm.h>
 #include <linux/usb/sprd_pd.h>
 
-/* Fast charging device name */
+
 #define SPRD_FCHG_TCPM_PD_NAME			"sprd-tcpm-source-psy-sc27xx-pd"
 #define SPRD_FCHG_SFCP_NAME			"sc27xx_fast_charger"
 
@@ -50,10 +43,6 @@ struct sprd_fchg_info {
 	struct sprd_fchg_ops *ops;
 	struct mutex lock;
 	struct adapter_power_cap pd_source_cap;
-#ifdef CONFIG_VENDOR_SQC_CHARGER
-	struct delayed_work delay_notify_sqc;
-	struct workqueue_struct *delay_notify_queue;
-#endif
 	const char *customized_fchg_psy;
 	u32 fchg_type;
 	int input_vol;
@@ -69,6 +58,7 @@ struct sprd_fchg_info {
 	bool pps_enable;
 	bool pps_active;
 	bool support_fchg;
+	bool support_sfcp;
 	bool support_pd_pps;
 	bool shutdown_flag;
 };
@@ -92,4 +82,4 @@ struct sprd_fchg_ops {
 
 struct sprd_fchg_info *sprd_fchg_info_register(struct device *dev);
 
-#endif /* _SPRD_VCHG_DETECT_H */
+#endif 

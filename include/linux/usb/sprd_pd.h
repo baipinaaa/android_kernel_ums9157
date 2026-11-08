@@ -1,8 +1,4 @@
-/*
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 as
- * published by the Free Software Foundation.
- */
+
 
 #ifndef __LINUX_USB_SPRD_PD_H
 #define __LINUX_USB_SPRD_PD_H
@@ -11,9 +7,9 @@
 #include <linux/types.h>
 #include <linux/usb/typec.h>
 
-/* USB PD Messages */
+
 enum sprd_pd_ctrl_msg_type {
-	/* 0 Reserved */
+	
 	SPRD_PD_CTRL_GOOD_CRC = 1,
 	SPRD_PD_CTRL_GOTO_MIN = 2,
 	SPRD_PD_CTRL_ACCEPT = 3,
@@ -27,18 +23,18 @@ enum sprd_pd_ctrl_msg_type {
 	SPRD_PD_CTRL_VCONN_SWAP = 11,
 	SPRD_PD_CTRL_WAIT = 12,
 	SPRD_PD_CTRL_SOFT_RESET = 13,
-	/* 14-15 Reserved */
+	
 	SPRD_PD_CTRL_NOT_SUPP = 16,
 	SPRD_PD_CTRL_GET_SOURCE_CAP_EXT = 17,
 	SPRD_PD_CTRL_GET_STATUS = 18,
 	SPRD_PD_CTRL_FR_SWAP = 19,
 	SPRD_PD_CTRL_GET_PPS_STATUS = 20,
 	SPRD_PD_CTRL_GET_COUNTRY_CODES = 21,
-	/* 22-31 Reserved */
+	
 };
 
 enum sprd_pd_data_msg_type {
-	/* 0 Reserved */
+	
 	SPRD_PD_DATA_SOURCE_CAP = 1,
 	SPRD_PD_DATA_REQUEST = 2,
 	SPRD_PD_DATA_BIST = 3,
@@ -46,13 +42,13 @@ enum sprd_pd_data_msg_type {
 	SPRD_PD_DATA_BATT_STATUS = 5,
 	SPRD_PD_DATA_ALERT = 6,
 	SPRD_PD_DATA_GET_COUNTRY_INFO = 7,
-	/* 8-14 Reserved */
+	
 	SPRD_PD_DATA_VENDOR_DEF = 15,
-	/* 16-31 Reserved */
+	
 };
 
 enum sprd_pd_ext_msg_type {
-	/* 0 Reserved */
+	
 	SPRD_PD_EXT_SOURCE_CAP_EXT = 1,
 	SPRD_PD_EXT_STATUS = 2,
 	SPRD_PD_EXT_GET_BATT_CAP = 3,
@@ -67,7 +63,7 @@ enum sprd_pd_ext_msg_type {
 	SPRD_PD_EXT_PPS_STATUS = 12,
 	SPRD_PD_EXT_COUNTRY_INFO = 13,
 	SPRD_PD_EXT_COUNTRY_CODES = 14,
-	/* 15-31 Reserved */
+	
 };
 
 #define SPRD_PD_REV10				0x0
@@ -180,23 +176,13 @@ static inline unsigned int sprd_pd_ext_header_data_size_le(__le16 ext_header)
 #define SPRD_PD_MAX_PAYLOAD		7
 #define SPRD_PD_EXT_MAX_CHUNK_DATA	26
 
-/**
-  * struct sprd_pd_chunked_ext_message_data - PD chunked extended message data as
-  *					 seen on wire
-  * @header:    PD extended message header
-  * @data:      PD extended message data
-  */
+
 struct sprd_pd_chunked_ext_message_data {
 	__le16 header;
 	u8 data[SPRD_PD_EXT_MAX_CHUNK_DATA];
 } __packed;
 
-/**
-  * struct sprd_pd_message - PD message as seen on wire
-  * @header:    PD message header
-  * @payload:   PD message payload
-  * @ext_msg:   PD message chunked extended message data
-  */
+
 struct sprd_pd_message {
 	__le16 header;
 	union {
@@ -205,7 +191,7 @@ struct sprd_pd_message {
 	};
 } __packed;
 
-/* PDO: Power Data Object */
+
 #define SPRD_PDO_MAX_OBJECTS		7
 
 enum sprd_pd_pdo_type {
@@ -224,14 +210,14 @@ enum sprd_pd_pdo_type {
 #define SPRD_PDO_CURR_MASK			0x3ff
 #define SPRD_PDO_PWR_MASK			0x3ff
 
-#define SPRD_PDO_FIXED_DUAL_ROLE		BIT(29)	/* Power role swap supported */
-#define SPRD_PDO_FIXED_SUSPEND			BIT(28) /* USB Suspend supported (Source) */
-#define SPRD_PDO_FIXED_HIGHER_CAP		BIT(28) /* Requires more than vSafe5V (Sink) */
-#define SPRD_PDO_FIXED_EXTPOWER			BIT(27) /* Externally powered */
-#define SPRD_PDO_FIXED_USB_COMM			BIT(26) /* USB communications capable */
-#define SPRD_PDO_FIXED_DATA_SWAP		BIT(25) /* Data role swap supported */
-#define SPRD_PDO_FIXED_VOLT_SHIFT		10	/* 50mV units */
-#define SPRD_PDO_FIXED_CURR_SHIFT		0	/* 10mA units */
+#define SPRD_PDO_FIXED_DUAL_ROLE		BIT(29)	
+#define SPRD_PDO_FIXED_SUSPEND			BIT(28) 
+#define SPRD_PDO_FIXED_HIGHER_CAP		BIT(28) 
+#define SPRD_PDO_FIXED_EXTPOWER			BIT(27) 
+#define SPRD_PDO_FIXED_USB_COMM			BIT(26) 
+#define SPRD_PDO_FIXED_DATA_SWAP		BIT(25) 
+#define SPRD_PDO_FIXED_VOLT_SHIFT		10	
+#define SPRD_PDO_FIXED_CURR_SHIFT		0	
 
 #define SPRD_PDO_FIXED_VOLT(mv)		\
 	((((mv) / 50) & SPRD_PDO_VOLT_MASK) << SPRD_PDO_FIXED_VOLT_SHIFT)
@@ -243,11 +229,11 @@ enum sprd_pd_pdo_type {
 	(SPRD_PDO_TYPE(SPRD_PDO_TYPE_FIXED) | (flags) |		\
 	 SPRD_PDO_FIXED_VOLT(mv) | SPRD_PDO_FIXED_CURR(ma))
 
-#define SPRD_VSAFE5V				5000 /* mv units */
+#define SPRD_VSAFE5V				5000 
 
-#define SPRD_PDO_BATT_MAX_VOLT_SHIFT		20	/* 50mV units */
-#define SPRD_PDO_BATT_MIN_VOLT_SHIFT		10	/* 50mV units */
-#define SPRD_PDO_BATT_MAX_PWR_SHIFT		0	/* 250mW units */
+#define SPRD_PDO_BATT_MAX_VOLT_SHIFT		20	
+#define SPRD_PDO_BATT_MIN_VOLT_SHIFT		10	
+#define SPRD_PDO_BATT_MAX_PWR_SHIFT		0	
 
 #define SPRD_PDO_BATT_MIN_VOLT(mv)		\
 	((((mv) / 50) & SPRD_PDO_VOLT_MASK) << SPRD_PDO_BATT_MIN_VOLT_SHIFT)
@@ -262,9 +248,9 @@ enum sprd_pd_pdo_type {
 	(SPRD_PDO_TYPE(SPRD_PDO_TYPE_BATT) | SPRD_PDO_BATT_MIN_VOLT(min_mv) |	\
 	 SPRD_PDO_BATT_MAX_VOLT(max_mv) | SPRD_PDO_BATT_MAX_POWER(max_mw))
 
-#define SPRD_PDO_VAR_MAX_VOLT_SHIFT		20	/* 50mV units */
-#define SPRD_PDO_VAR_MIN_VOLT_SHIFT		10	/* 50mV units */
-#define SPRD_PDO_VAR_MAX_CURR_SHIFT		0	/* 10mA units */
+#define SPRD_PDO_VAR_MAX_VOLT_SHIFT		20	
+#define SPRD_PDO_VAR_MIN_VOLT_SHIFT		10	
+#define SPRD_PDO_VAR_MAX_CURR_SHIFT		0	
 
 #define SPRD_PDO_VAR_MIN_VOLT(mv)		\
 	((((mv) / 50) & SPRD_PDO_VOLT_MASK) << SPRD_PDO_VAR_MIN_VOLT_SHIFT)
@@ -283,14 +269,14 @@ enum sprd_pd_apdo_type {
 	SPRD_APDO_TYPE_PPS = 0,
 };
 
-#define SPRD_PDO_APDO_TYPE_SHIFT	28	/* Only valid value currently is 0x0 - PPS */
+#define SPRD_PDO_APDO_TYPE_SHIFT	28	
 #define SPRD_PDO_APDO_TYPE_MASK		0x3
 
 #define SPRD_PDO_APDO_TYPE(t)	((t) << SPRD_PDO_APDO_TYPE_SHIFT)
 
-#define SPRD_PDO_PPS_APDO_MAX_VOLT_SHIFT	17	/* 100mV units */
-#define SPRD_PDO_PPS_APDO_MIN_VOLT_SHIFT	8	/* 100mV units */
-#define SPRD_PDO_PPS_APDO_MAX_CURR_SHIFT	0	/* 50mA units */
+#define SPRD_PDO_PPS_APDO_MAX_VOLT_SHIFT	17	
+#define SPRD_PDO_PPS_APDO_MIN_VOLT_SHIFT	8	
+#define SPRD_PDO_PPS_APDO_MAX_CURR_SHIFT	0	
 
 #define SPRD_PDO_PPS_APDO_VOLT_MASK		0xff
 #define SPRD_PDO_PPS_APDO_CURR_MASK		0x7f
@@ -359,13 +345,13 @@ static inline unsigned int sprd_pdo_pps_apdo_max_current(u32 pdo)
 	return ((pdo >> SPRD_PDO_PPS_APDO_MAX_CURR_SHIFT) & SPRD_PDO_PPS_APDO_CURR_MASK) * 50;
 }
 
-/* RDO: Request Data Object */
+
 #define SPRD_RDO_OBJ_POS_SHIFT			28
 #define SPRD_RDO_OBJ_POS_MASK			0x7
-#define SPRD_RDO_GIVE_BACK			BIT(27)	/* Supports reduced operating current */
-#define SPRD_RDO_CAP_MISMATCH			BIT(26) /* Not satisfied by source caps */
-#define SPRD_RDO_USB_COMM			BIT(25) /* USB communications capable */
-#define SPRD_RDO_NO_SUSPEND			BIT(24) /* USB Suspend not supported */
+#define SPRD_RDO_GIVE_BACK			BIT(27)	
+#define SPRD_RDO_CAP_MISMATCH			BIT(26) 
+#define SPRD_RDO_USB_COMM			BIT(25) 
+#define SPRD_RDO_NO_SUSPEND			BIT(24) 
 
 #define SPRD_RDO_PWR_MASK			0x3ff
 #define SPRD_RDO_CURR_MASK			0x3ff
@@ -386,8 +372,8 @@ static inline unsigned int sprd_pdo_pps_apdo_max_current(u32 pdo)
 	(SPRD_RDO_OBJ(idx) | (flags) |				\
 	 SPRD_PDO_FIXED_OP_CURR(op_ma) | SPRD_PDO_FIXED_MAX_CURR(max_ma))
 
-#define SPRD_RDO_BATT_OP_PWR_SHIFT		10	/* 250mW units */
-#define SPRD_RDO_BATT_MAX_PWR_SHIFT		0	/* 250mW units */
+#define SPRD_RDO_BATT_OP_PWR_SHIFT		10	
+#define SPRD_RDO_BATT_MAX_PWR_SHIFT		0	
 
 #define SPRD_RDO_BATT_OP_PWR(mw)		\
 	((((mw) / 250) & SPRD_RDO_PWR_MASK) << SPRD_RDO_BATT_OP_PWR_SHIFT)
@@ -446,39 +432,48 @@ static inline unsigned int sprd_rdo_max_power(u32 rdo)
 	return ((rdo >> SPRD_RDO_BATT_MAX_PWR_SHIFT) & SPRD_RDO_PWR_MASK) * 250;
 }
 
-/* USB PD timers and counters */
-#define SPRD_PD_T_NO_RESPONSE			5000	/* 4.5 - 5.5 seconds */
-#define SPRD_PD_T_DB_DETECT			10000	/* 10 - 15 seconds */
-#define SPRD_PD_T_SEND_SOURCE_CAP		200	/* 100 - 200 ms */
-#define SPRD_PD_T_SENDER_RESPONSE		60	/* 24 - 30 ms, relaxed */
+
+#define SPRD_PD_T_NO_RESPONSE			5000	
+#define SPRD_PD_T_DB_DETECT			10000	
+#define SPRD_PD_T_SEND_SOURCE_CAP		200	
+#define SPRD_PD_T_SEND_SOURCE_CAP_RESET		700
+#define SPRD_PD_T_SENDER_RESPONSE		60	
+#define SPRD_PD_T_SENDER_RESPONSE_DR		200	
+#define SPRD_PD_T_SENDER_RESPONSE_PR		150	
+#define SPRD_PD_T_SENDER_RESPONSE_RESET		700
 #define SPRD_PD_T_SOURCE_ACTIVITY		45
 #define SPRD_PD_T_SINK_ACTIVITY			135
-#define SPRD_PD_T_SINK_WAIT_CAP			460	/* 310 - 620 ms */
+#define SPRD_PD_T_SINK_WAIT_CAP			460	
+#define SPRD_PD_T_SINK_WAIT_CAP_PR		620	
 #define SPRD_PD_T_PS_TRANSITION			500
 #define SPRD_PD_T_SRC_TRANSITION		35
 #define SPRD_PD_T_DRP_SNK			40
 #define SPRD_PD_T_DRP_SRC			30
 #define SPRD_PD_T_PS_SOURCE_OFF			920
-#define SPRD_PD_T_PS_SOURCE_ON			480
+#define SPRD_PD_T_PS_SOURCE_ON			100 
+#define SPRD_PD_T_PS_SOURCE_ON_RESET		5
+#define SPRD_PD_T_PS_SOURCE_ON_SWAP		1000 
 #define SPRD_PD_T_PS_HARD_RESET			30
 #define SPRD_PD_T_SRC_RECOVER			760
 #define SPRD_PD_T_SRC_RECOVER_MAX		1000
 #define SPRD_PD_T_SRC_TURN_ON			275
 #define SPRD_PD_T_SAFE_0V			650
 #define SPRD_PD_T_VCONN_SOURCE_ON		100
-#define SPRD_PD_T_SINK_REQUEST			100	/* 100 ms minimum */
-#define SPRD_PD_T_ERROR_RECOVERY		100	/* minimum 25 is insufficient */
-#define SPRD_PD_T_SRCSWAPSTDBY			625     /* Maximum of 650ms */
-#define SPRD_PD_T_NEWSRC			250     /* Maximum of 275ms */
-#define SPRD_PD_T_SWAP_SRC_START		20	/* Minimum of 20ms */
+#define SPRD_PD_T_SINK_REQUEST			100	
+#define SPRD_PD_T_ERROR_RECOVERY		100	
+#define SPRD_PD_T_SRCSWAPSTDBY			200     
+#define SPRD_PD_T_NEWSRC			250     
+#define SPRD_PD_T_NEWSRC_SWAP			150     
+#define SPRD_PD_T_SWAP_SRC_START		50	
 
-#define SPRD_PD_T_DRP_TRY			100	/* 75 - 150 ms */
-#define SPRD_PD_T_DRP_TRYWAIT			600	/* 400 - 800 ms */
+#define SPRD_PD_T_DRP_TRY			100	
+#define SPRD_PD_T_DRP_TRYWAIT			600	
 
-#define SPRD_PD_T_CC_DEBOUNCE			100	/* 100 - 200 ms */
-#define SPRD_PD_T_PD_DEBOUNCE			20	/* 10 - 20 ms */
+#define SPRD_PD_T_CC_DEBOUNCE			5	
+#define SPRD_PD_T_CC_DEBOUNCE_SWAP		100	
+#define SPRD_PD_T_PD_DEBOUNCE			20	
 
 #define SPRD_PD_N_CAPS_COUNT			(SPRD_PD_T_NO_RESPONSE / SPRD_PD_T_SEND_SOURCE_CAP)
 #define SPRD_PD_N_HARD_RESET_COUNT		2
 
-#endif /* __LINUX_USB_SPRD_PD_H */
+#endif 
