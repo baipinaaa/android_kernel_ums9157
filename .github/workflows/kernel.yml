@@ -23,19 +23,28 @@ jobs:
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y -qq bc bison flex libssl-dev libelf-dev \
-            clang-12 lld-12 llvm-12 gcc-aarch64-linux-gnu binutils-aarch64-linux-gnu
-          # 设备内核是 Android clang 12.0.5 (r416183b) 编的；Ubuntu jammy 的 clang-12 是
-          # 12.0.1，同一个大版本，代码生成比 clang 14 接近得多。make LLVM=1 只认不带
-          # 版本后缀的 clang/ld.lld/llvm-* 名字，所以把 12 的工具链软链到 PATH 最前面。
-          for t in clang clang++ ld.lld llvm-ar llvm-nm llvm-objcopy llvm-objdump llvm-readelf llvm-strip llvm-size; do
-            src=$(command -v "${t}-12" || true)
-            if [ -n "$src" ]; then sudo ln -sf "$src" "/usr/local/bin/$t"; fi
-          done
-          hash -r
-          echo "--- PATH clang: $(command -v clang)"
-          echo "--- clang:"; clang --version | head -1
-          echo "--- lld:";   ld.lld --version | head -1
-          echo "--- llvm-ar:"; llvm-ar --version | head -1
+            gcc-aarch64-linux-gnu binutils-aarch64-linux-gnu
+
+      - name: 下载 Android clang 12.0.5 (r416183b)
+        run: |
+          set -euo pipefail
+          # 设备内核就是这个工具链编的：CONFIG_CC_VERSION_TEXT="Android (7284624, based on
+          # r416183b) clang version 12.0.5 (... c935d99d7cf2016289302412d708641d52d2f7ee)"
+          # Ubuntu jammy 只有 clang-12 = 12.0.1，差 4 个补丁版本，CFI typeid / SCS 代码生成
+          # 未必一致，所以直接用 AOSP 官方预编译包。GitHub runner 能直连 googlesource。
+          URL="https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/refs/heads/android12-release/clang-r416183b.tar.gz"
+          mkdir -p "$HOME/clang-r416183b"
+          curl -fL --retry 3 --retry-delay 5 --connect-timeout 30 -o /tmp/clang.tgz "$URL"
+          ls -l /tmp/clang.tgz
+          tar -xzf /tmp/clang.tgz -C "$HOME/clang-r416183b"
+          echo "$HOME/clang-r416183b/bin" >> "$GITHUB_PATH"
+          echo "LD_LIBRARY_PATH=$HOME/clang-r416183b/lib64:$HOME/clang-r416183b/lib" >> "$GITHUB_ENV"
+          export PATH="$HOME/clang-r416183b/bin:$PATH"
+          export LD_LIBRARY_PATH="$HOME/clang-r416183b/lib64:$HOME/clang-r416183b/lib"
+          echo "--- clang:";    clang --version | head -1
+          echo "--- lld:";      ld.lld --version | head -1
+          echo "--- llvm-ar:";  llvm-ar --version | head -1
+          clang --version | head -1 | grep -q 'clang version 12\.0\.5' || { echo 'ERROR: 不是 Android clang 12.0.5'; exit 1; }
 
       - name: 加 swap（LTO+CFI 编译很吃内存）
         continue-on-error: true
@@ -71,8 +80,9 @@ jobs:
           done
           # full LTO（不是 ThinLTO），与设备一致
           grep -q "^# CONFIG_THINLTO is not set" .config || { echo "ERROR: THINLTO 仍然是 y"; exit 1; }
-          # 工具链大版本必须是 clang 12，否则说明软链没生效
-          grep -q "^CONFIG_CLANG_VERSION=1200" .config || { echo "ERROR: 不是 clang 12：$(grep CONFIG_CLANG_VERSION= .config)"; exit 1; }
+          # 工具链必须是 Android clang 12.0.5，否则说明下载/ PATH 没生效
+          grep -q "^CONFIG_CLANG_VERSION=120005" .config || { echo "ERROR: 不是 clang 12.0.5：$(grep CONFIG_CLANG_VERSION= .config)"; exit 1; }
+          grep -q '^CONFIG_CC_VERSION_TEXT="Android' .config || { echo "ERROR: 不是 Android clang：$(grep CONFIG_CC_VERSION_TEXT= .config)"; exit 1; }
           grep -E "^(CONFIG_CC_IS|CONFIG_LTO|CONFIG_CFI|CONFIG_SHADOW_CALL|CONFIG_CLANG_VERSION|CONFIG_LLD_VERSION)" .config
 
       - name: 编译 Image（-k 一次收集全部错误）
