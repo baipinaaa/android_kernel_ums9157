@@ -1,14 +1,16 @@
 # SPDX-License-Identifier: GPL-2.0
-config EXFAT_FS
-	tristate "exFAT fs support"
+config EXFAT_STAGING
+	tristate "exFAT fs support (staging, 5.4 old driver)"
 	depends on BLOCK
 	select NLS
+	default n
 	help
-	  This adds support for the exFAT file system.
+	  This is the old staging exFAT driver.  The mainline fs/exfat
+	  driver is selected by CONFIG_EXFAT_FS; enable only one of them.
 
 config EXFAT_DONT_MOUNT_VFAT
-	bool "Prohibit mounting of fat/vfat filesystems by exFAT"
-	depends on EXFAT_FS
+	bool "Prohibit mounting of fat/vfat filesystems by exFAT (staging)"
+	depends on EXFAT_STAGING
 	default y
 	help
 	  By default, the exFAT driver will only mount exFAT filesystems, and refuse
@@ -17,34 +19,34 @@ config EXFAT_DONT_MOUNT_VFAT
 
 config EXFAT_DISCARD
 	bool "enable discard support"
-	depends on EXFAT_FS
+	depends on EXFAT_STAGING
 	default y
 
 config EXFAT_DELAYED_SYNC
 	bool "enable delayed sync"
-	depends on EXFAT_FS
+	depends on EXFAT_STAGING
 	default n
 
 config EXFAT_KERNEL_DEBUG
 	bool "enable kernel debug features via ioctl"
-	depends on EXFAT_FS
+	depends on EXFAT_STAGING
 	default n
 
 config EXFAT_DEBUG_MSG
 	bool "print debug messages"
-	depends on EXFAT_FS
+	depends on EXFAT_STAGING
 	default n
 
-config EXFAT_DEFAULT_CODEPAGE
-	int "Default codepage for exFAT"
+config EXFAT_STAGING_DEFAULT_CODEPAGE
+	int "Default codepage for exFAT (staging)"
 	default 437
-	depends on EXFAT_FS
+	depends on EXFAT_STAGING
 	help
 	  This option should be set to the codepage of your exFAT filesystems.
 
-config EXFAT_DEFAULT_IOCHARSET
-	string "Default iocharset for exFAT"
+config EXFAT_STAGING_DEFAULT_IOCHARSET
+	string "Default iocharset for exFAT (staging)"
 	default "utf8"
-	depends on EXFAT_FS
+	depends on EXFAT_STAGING
 	help
 	  Set this to the default input/output character set you'd like exFAT to use.
