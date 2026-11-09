@@ -17,7 +17,8 @@
 #include <linux/seq_file.h>
 #include <linux/mm.h>
 
-#if PAGE_SIZE == SZ_4K && defined(CONFIG_64BIT)
+#if 0 /* 设备内核无 16KB 页迁移特性（kallsyms 无 vma_pad_pages/vma_data_pages 等），
+       * 全部走下面的 inline 空实现。 */
 extern void vma_set_pad_pages(struct vm_area_struct *vma,
 			      unsigned long nr_pages);
 

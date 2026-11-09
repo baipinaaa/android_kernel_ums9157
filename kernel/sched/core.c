@@ -823,6 +823,9 @@ unsigned int sysctl_sched_uclamp_util_max = SCHED_CAPACITY_SCALE;
  */
 unsigned int sysctl_sched_uclamp_util_min_rt_default = SCHED_CAPACITY_SCALE;
 
+/* map util clamp_min to boost（设备 kallsyms: ffffffc012380d00 D） */
+unsigned int sysctl_sched_uclamp_min_to_boost = 1;
+
 /* All clamps are required to be less or equal than these values */
 static struct uclamp_se uclamp_default[UCLAMP_CNT];
 

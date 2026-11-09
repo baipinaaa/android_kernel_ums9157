@@ -2360,6 +2360,8 @@ static inline void cpufreq_update_util(struct rq *rq, unsigned int flags) {}
 #ifdef CONFIG_UCLAMP_TASK
 unsigned long uclamp_eff_value(struct task_struct *p, enum uclamp_id clamp_id);
 
+extern unsigned int sysctl_sched_uclamp_min_to_boost;
+
 /* 设备 kallsyms: ffffffc0101fb318 T uclamp_transform_boost */
 unsigned long uclamp_transform_boost(unsigned long util, unsigned long uclamp_min,
 				     unsigned long uclamp_max);

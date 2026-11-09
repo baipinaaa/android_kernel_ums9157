@@ -277,6 +277,11 @@ void ion_buffer_kmap_put(struct ion_buffer *buffer)
 	}
 }
 
+long get_ion_heap_total_pages(void)
+{
+	return atomic_long_read(&total_heap_bytes) >> PAGE_SHIFT;
+}
+
 u64 ion_get_total_heap_bytes(void)
 {
 	return atomic_long_read(&total_heap_bytes);
