@@ -153,7 +153,6 @@ enum {
 	Opt_atgc,
 	Opt_gc_merge,
 	Opt_nogc_merge,
-	Opt_lookup_mode,
 	Opt_err,
 };
 
@@ -229,7 +228,6 @@ static match_table_t f2fs_tokens = {
 	{Opt_atgc, "atgc"},
 	{Opt_gc_merge, "gc_merge"},
 	{Opt_nogc_merge, "nogc_merge"},
-	{Opt_lookup_mode, "lookup_mode=%s"},
 	{Opt_err, NULL},
 };
 
@@ -1150,23 +1148,6 @@ static int parse_options(struct super_block *sb, char *options, bool is_remount)
 			clear_opt(sbi, GC_MERGE);
 			break;
 
-		case Opt_lookup_mode:
-			name = match_strdup(&args[0]);
-			if (!name)
-				return -ENOMEM;
-			if (!strcmp(name, "perf")) {
-				f2fs_set_lookup_mode(sbi, LOOKUP_PERF);
-			} else if (!strcmp(name, "compat")) {
-				f2fs_set_lookup_mode(sbi, LOOKUP_COMPAT);
-			} else if (!strcmp(name, "auto")) {
-				f2fs_set_lookup_mode(sbi, LOOKUP_AUTO);
-			} else {
-				kfree(name);
-				return -EINVAL;
-			}
-			kfree(name);
-			break;
-
 		default:
 			f2fs_err(sbi, "Unrecognized mount option \"%s\" or missing value",
 				 p);
@@ -1917,13 +1898,6 @@ static int f2fs_show_options(struct seq_file *seq, struct dentry *root)
 	if (test_opt(sbi, ATGC))
 		seq_puts(seq, ",atgc");
 
-	if (f2fs_get_lookup_mode(sbi) == LOOKUP_PERF)
-		seq_show_option(seq, "lookup_mode", "perf");
-	else if (f2fs_get_lookup_mode(sbi) == LOOKUP_COMPAT)
-		seq_show_option(seq, "lookup_mode", "compat");
-	else if (f2fs_get_lookup_mode(sbi) == LOOKUP_AUTO)
-		seq_show_option(seq, "lookup_mode", "auto");
-
 	return 0;
 }
 
@@ -1979,7 +1953,6 @@ static void default_options(struct f2fs_sb_info *sbi)
 
 	f2fs_build_fault_attr(sbi, 0, 0);
 
-	f2fs_set_lookup_mode(sbi, LOOKUP_PERF);
 }
 
 #ifdef CONFIG_QUOTA
