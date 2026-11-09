@@ -176,6 +176,18 @@ int printk(const char *fmt, ...);
 __printf(1, 2) __cold int printk_deferred(const char *fmt, ...);
 
 /*
+ * 展锐 5.4.210 基线需要：9620 的 page_alloc.c 用这两个包裹打印。
+ * 5.4.210 没有 printk_safe_enter/exit，用空实现（只影响打印防死锁）。
+ */
+static inline void printk_deferred_enter(void)
+{
+}
+
+static inline void printk_deferred_exit(void)
+{
+}
+
+/*
  * Please don't use printk_ratelimit(), because it shares ratelimiting state
  * with all other unrelated printk_ratelimit() callsites.  Instead use
  * printk_ratelimited() or plain old __ratelimit().

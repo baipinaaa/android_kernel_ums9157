@@ -42,6 +42,11 @@ EXPORT_TRACEPOINT_SYMBOL_GPL(pelt_se_tp);
 EXPORT_TRACEPOINT_SYMBOL_GPL(sched_overutilized_tp);
 
 DEFINE_PER_CPU_SHARED_ALIGNED(struct rq, runqueues);
+
+/*
+ * 设备用 per-cpu 变量保存 push_task（GKI v1.0 合规，不放进 struct rq）。
+ */
+DEFINE_PER_CPU_SHARED_ALIGNED(struct task_struct *, runqueues_push_task);
 EXPORT_SYMBOL_GPL(runqueues);
 
 #ifdef CONFIG_SCHED_DEBUG
@@ -1024,6 +1029,23 @@ uclamp_eff_get(struct task_struct *p, enum uclamp_id clamp_id)
 		return uc_max;
 
 	return uc_req;
+}
+
+unsigned long uclamp_transform_boost(unsigned long util, unsigned long uclamp_min,
+				    unsigned long uclamp_max)
+{
+	unsigned long margin;
+
+	/* Don't transform if util is under uclamp_min. */
+	if (unlikely(uclamp_min > uclamp_max))
+		return util;
+
+	if (util >= uclamp_max)
+		return uclamp_max;
+
+	margin = DIV_ROUND_CLOSEST_ULL(uclamp_min * (uclamp_max - util),
+					SCHED_CAPACITY_SCALE);
+	return util + margin;
 }
 
 unsigned long uclamp_eff_value(struct task_struct *p, enum uclamp_id clamp_id)

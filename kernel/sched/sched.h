@@ -3,7 +3,6 @@
  * Scheduler internal types and methods:
  */
 #include <linux/sched.h>
-#include <linux/percpu.h>
 
 #include <linux/sched/autogroup.h>
 #include <linux/sched/clock.h>
@@ -155,11 +154,9 @@ extern long calc_load_fold_active(struct rq *this_rq, long adjust);
  * Single value that denotes runtime == period, ie unlimited time.
  */
 #define RUNTIME_INF		((u64)~0ULL)
-
 #ifdef CONFIG_SPRD_CORE_CTL
 void init_sched_groups_capacity(int cpu, struct sched_domain *sd);
 #endif
-
 static inline int idle_policy(int policy)
 {
 	return policy == SCHED_IDLE;
@@ -706,6 +703,12 @@ struct dl_rq {
 #define entity_is_task(se)	1
 #endif
 
+#ifdef CONFIG_RT_GROUP_SCHED
+#define rt_entity_is_task(rt_se) (!(rt_se)->my_q)
+#else /* CONFIG_RT_GROUP_SCHED */
+#define rt_entity_is_task(rt_se) (1)
+#endif /* CONFIG_RT_GROUP_SCHED */
+
 #ifdef CONFIG_SMP
 /*
  * XXX we want to get rid of these helpers and use the full load resolution.
@@ -1076,6 +1079,7 @@ static inline void update_idle_core(struct rq *rq) { }
 #endif
 
 DECLARE_PER_CPU_SHARED_ALIGNED(struct rq, runqueues);
+DECLARE_PER_CPU_SHARED_ALIGNED(struct task_struct *, runqueues_push_task);
 
 #define cpu_rq(cpu)		(&per_cpu(runqueues, (cpu)))
 #define this_rq()		this_cpu_ptr(&runqueues)
@@ -1336,6 +1340,9 @@ init_numa_balancing(unsigned long clone_flags, struct task_struct *p)
 }
 #endif /* CONFIG_NUMA_BALANCING */
 
+extern int migrate_swap(struct task_struct *p, struct task_struct *t,
+			int cpu, int scpu);
+
 #ifdef CONFIG_SMP
 
 extern int migrate_swap(struct task_struct *p, struct task_struct *t,
@@ -1371,6 +1378,8 @@ extern void sched_ttwu_pending(void);
 #define for_each_domain(cpu, __sd) \
 	for (__sd = rcu_dereference_check_sched_domain(cpu_rq(cpu)->sd); \
 			__sd; __sd = __sd->parent)
+
+#define for_each_lower_domain(sd) for (; sd; sd = sd->child)
 
 /**
  * highest_flag_domain - Return highest sched_domain containing flag.
@@ -1492,13 +1501,9 @@ static inline void unregister_sched_domain_sysctl(void)
 }
 #endif
 
-extern int newidle_balance(struct rq *this_rq, struct rq_flags *rf);
-
 #else
 
 static inline void sched_ttwu_pending(void) { }
-
-static inline int newidle_balance(struct rq *this_rq, struct rq_flags *rf) { return 0; }
 
 #endif /* CONFIG_SMP */
 
@@ -1825,8 +1830,10 @@ static inline void set_next_task(struct rq *rq, struct task_struct *next)
 
 #ifdef CONFIG_SMP
 #define sched_class_highest (&stop_sched_class)
+extern void check_for_migration(struct rq *rq, struct task_struct *p);
 #else
 #define sched_class_highest (&dl_sched_class)
+static inline void check_for_migration(struct rq *rq, struct task_struct *p) {}
 #endif
 
 #define for_class_range(class, _from, _to) \
@@ -2361,6 +2368,8 @@ static inline void cpufreq_update_util(struct rq *rq, unsigned int flags) {}
 
 #ifdef CONFIG_UCLAMP_TASK
 unsigned long uclamp_eff_value(struct task_struct *p, enum uclamp_id clamp_id);
+unsigned long uclamp_transform_boost(unsigned long util, unsigned long uclamp_min,
+				     unsigned long uclamp_max);
 
 /**
  * uclamp_util_with - clamp @util with @rq and @p effective uclamp values.
@@ -2383,20 +2392,28 @@ static __always_inline
 unsigned long uclamp_rq_util_with(struct rq *rq, unsigned long util,
 				  struct task_struct *p)
 {
-	unsigned long min_util;
-	unsigned long max_util;
+	unsigned long min_util = 0;
+	unsigned long max_util = 0;
+	unsigned long clamp_util;
 
 	if (!static_branch_likely(&sched_uclamp_used))
 		return util;
 
-	min_util = READ_ONCE(rq->uclamp[UCLAMP_MIN].value);
-	max_util = READ_ONCE(rq->uclamp[UCLAMP_MAX].value);
-
 	if (p) {
-		min_util = max(min_util, uclamp_eff_value(p, UCLAMP_MIN));
-		max_util = max(max_util, uclamp_eff_value(p, UCLAMP_MAX));
+		min_util = uclamp_eff_value(p, UCLAMP_MIN);
+		max_util = uclamp_eff_value(p, UCLAMP_MAX);
+
+		/*
+		 * Ignore last runnable task's max clamp, as this task will
+		 * reset it. Similarly, no need to read the rq's min clamp.
+		 */
+		if (rq->uclamp_flags & UCLAMP_FLAG_IDLE)
+			goto out;
 	}
 
+	min_util = max_t(unsigned long, min_util, READ_ONCE(rq->uclamp[UCLAMP_MIN].value));
+	max_util = max_t(unsigned long, max_util, READ_ONCE(rq->uclamp[UCLAMP_MAX].value));
+out:
 	/*
 	 * Since CPU's {min,max}_util clamps are MAX aggregated considering
 	 * RUNNABLE tasks with _different_ clamps, we can end up with an
@@ -2405,12 +2422,22 @@ unsigned long uclamp_rq_util_with(struct rq *rq, unsigned long util,
 	if (unlikely(min_util >= max_util))
 		return min_util;
 
-	return clamp(util, min_util, max_util);
+	if (sysctl_sched_uclamp_min_to_boost)
+		clamp_util = uclamp_transform_boost(util, min_util, max_util);
+	else
+		clamp_util = clamp(util, min_util, max_util);
+
+	return clamp_util;
 }
 
 static inline bool uclamp_boosted(struct task_struct *p)
 {
 	return uclamp_eff_value(p, UCLAMP_MIN) > 0;
+}
+
+static inline bool uclamp_blocked(struct task_struct *p)
+{
+	return uclamp_eff_value(p, UCLAMP_MAX) < SCHED_CAPACITY_SCALE;
 }
 
 /*
@@ -2433,6 +2460,10 @@ unsigned long uclamp_rq_util_with(struct rq *rq, unsigned long util,
 	return util;
 }
 static inline bool uclamp_boosted(struct task_struct *p)
+{
+	return false;
+}
+static inline bool uclamp_blocked(struct task_struct *p)
 {
 	return false;
 }
@@ -2470,6 +2501,7 @@ static inline bool uclamp_latency_sensitive(struct task_struct *p)
 # define arch_scale_freq_invariant()	false
 #endif
 
+extern struct cpumask min_cap_cpu_mask;
 #ifdef CONFIG_SMP
 static inline unsigned long capacity_orig_of(int cpu)
 {
@@ -2561,7 +2593,7 @@ unsigned long scale_irq_capacity(unsigned long util, unsigned long irq, unsigned
 }
 #endif
 
-#if defined(CONFIG_ENERGY_MODEL) && defined(CONFIG_CPU_FREQ_GOV_SCHEDUTIL)
+#if defined(CONFIG_ENERGY_MODEL)
 
 #define perf_domain_span(pd) (to_cpumask(((pd)->em_pd->cpus)))
 
@@ -2569,15 +2601,15 @@ DECLARE_STATIC_KEY_FALSE(sched_energy_present);
 
 static inline bool sched_energy_enabled(void)
 {
-	return static_branch_unlikely(&sched_energy_present);
+	return static_branch_likely(&sched_energy_present);
 }
 
-#else /* ! (CONFIG_ENERGY_MODEL && CONFIG_CPU_FREQ_GOV_SCHEDUTIL) */
+#else /* !CONFIG_ENERGY_MODEL */
 
 #define perf_domain_span(pd) NULL
 static inline bool sched_energy_enabled(void) { return false; }
 
-#endif /* CONFIG_ENERGY_MODEL && CONFIG_CPU_FREQ_GOV_SCHEDUTIL */
+#endif /* CONFIG_ENERGY_MODEL */
 
 #ifdef CONFIG_MEMBARRIER
 /*
@@ -2611,8 +2643,6 @@ static inline void membarrier_switch_mm(struct rq *rq,
 
 #ifdef CONFIG_SPRD_ROTATION_TASK
 DECLARE_PER_CPU_SHARED_ALIGNED(bool, cpu_reserved);
-extern struct cpumask min_cap_cpu_mask;
-
 static inline bool is_reserved(int cpu)
 {
 	return per_cpu(cpu_reserved, cpu);
@@ -2627,7 +2657,6 @@ static inline void clear_reserved(int cpu)
 {
 	per_cpu(cpu_reserved, cpu) = false;
 }
-
 void check_for_task_rotation(struct rq *src_rq);
 u64 sched_ktime_clock(void);
 #else

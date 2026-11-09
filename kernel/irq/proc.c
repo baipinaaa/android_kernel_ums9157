@@ -561,8 +561,7 @@ void sprd_dump_interrupts(void)
 	seq_buf_printf(p, "%*s", prec + 8, "");
 	for_each_possible_cpu(j)
 		seq_buf_printf(p, "CPU%-8d", j);
-	seq_buf_printf(p, "
-");
+	seq_buf_printf(p, "\n");
 
 	for (i = 0; i < nr_irqs; i++) {
 		struct irq_desc *desc;
@@ -611,8 +610,7 @@ void sprd_dump_interrupts(void)
 				seq_buf_printf(p, ", %s", action->name);
 		}
 
-		seq_buf_printf(p, "
-");
+		seq_buf_printf(p, "\n");
 	}
 
 	arch_show_interrupts(NULL, prec);
