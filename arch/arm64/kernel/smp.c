@@ -22,6 +22,7 @@
 #include <linux/err.h>
 #include <linux/cpu.h>
 #include <linux/smp.h>
+#include <linux/seq_buf.h>
 #include <linux/seq_file.h>
 #include <linux/irq.h>
 #include <linux/irqchip/arm-gic-v3.h>
@@ -51,6 +52,9 @@
 #include <asm/tlbflush.h>
 #include <asm/ptrace.h>
 #include <asm/virt.h>
+
+#include <asm/system_misc.h>
+#include <linux/soc/sprd/sprd_sysdump.h>
 
 #define CREATE_TRACE_POINTS
 #include <trace/events/ipi.h>
@@ -792,6 +796,24 @@ int arch_show_interrupts(struct seq_file *p, int prec)
 {
 	unsigned int cpu, i;
 
+#ifdef CONFIG_SPRD_SYSDUMP
+	if (!p) {
+		if (sprd_irqstat_seq_buf) {
+			for (i = 0; i < NR_IPI; i++) {
+				unsigned int irq = irq_desc_get_irq(ipi_desc[i]);
+
+				seq_buf_printf(sprd_irqstat_seq_buf, "%*s%u:%s", prec - 1, "IPI", i,
+						prec >= 4 ? " " : "");
+				for_each_possible_cpu(cpu)
+					seq_buf_printf(sprd_irqstat_seq_buf, "%10u ", kstat_irqs_cpu(irq, cpu));
+				seq_buf_printf(sprd_irqstat_seq_buf, "      %s\n", ipi_types[i]);
+			}
+
+			seq_buf_printf(sprd_irqstat_seq_buf, "%*s: %10lu\n", prec, "Err", irq_err_count);
+		}
+		return 0;
+	}
+#endif
 	for (i = 0; i < NR_IPI; i++) {
 		unsigned int irq = irq_desc_get_irq(ipi_desc[i]);
 		seq_printf(p, "%*s%u:%s", prec - 1, "IPI", i,
@@ -829,6 +851,9 @@ void arch_irq_work_raise(void)
 }
 #endif
 
+#ifdef CONFIG_SPRD_SYSDUMP
+static DEFINE_RAW_SPINLOCK(stop_lock);
+#endif
 static void local_cpu_stop(void)
 {
 	set_cpu_online(smp_processor_id(), false);
@@ -872,6 +897,14 @@ static void ipi_cpu_crash_stop(unsigned int cpu, struct pt_regs *regs)
 #endif
 }
 
+#ifdef CONFIG_SPRD_SYSDUMP
+	extern void sysdump_ipi(struct pt_regs *regs);
+#endif
+
+#ifdef CONFIG_SPRD_HANG_TRIGGER
+extern bool ipi_is_triggered(unsigned int cpu);
+#endif
+
 /*
  * Main handler for inter-processor interrupts
  */
@@ -879,12 +912,21 @@ static void do_handle_IPI(int ipinr)
 {
 	unsigned int cpu = smp_processor_id();
 	struct pt_regs *regs = get_irq_regs();
-
+#ifdef CONFIG_SPRD_SYSDUMP
+	struct pt_regs pregs;
+#endif
 	if ((unsigned)ipinr < NR_IPI)
 		trace_ipi_entry_rcuidle(ipi_types[ipinr]);
 
 	switch (ipinr) {
 	case IPI_RESCHEDULE:
+		#ifdef CONFIG_SPRD_HANG_TRIGGER
+		/* used for trigger cpu hang */
+		if (ipi_is_triggered(cpu)) {
+			while (1)
+				;
+		}
+		#endif
 		scheduler_ipi();
 		break;
 
@@ -894,6 +936,19 @@ static void do_handle_IPI(int ipinr)
 
 	case IPI_CPU_STOP:
 		trace_android_vh_ipi_stop_rcuidle(regs);
+#ifdef CONFIG_SPRD_SYSDUMP
+		if ((system_state == SYSTEM_BOOTING ||
+			system_state == SYSTEM_RUNNING)) {
+			raw_spin_lock(&stop_lock);
+			pr_crit("CPU%u: stopping...\n", cpu);
+			memset(&pregs, 0x00, sizeof(pregs));
+			get_pt_regs(&pregs);
+			sprd_dump_stack_reg(cpu, &pregs);
+			raw_spin_unlock(&stop_lock);
+		}
+		minidump_update_current_stack(cpu, regs);
+		sysdump_ipi(regs);
+#endif
 		local_cpu_stop();
 		break;
 

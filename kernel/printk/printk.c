@@ -378,6 +378,7 @@ struct printk_log {
 #ifdef CONFIG_PRINTK_CALLER
 	u32 caller_id;            /* thread id or processor id */
 #endif
+	u32 cpu;		/* the print cpu */
 }
 #ifdef CONFIG_HAVE_EFFICIENT_UNALIGNED_ACCESS
 __packed __aligned(4)
@@ -457,7 +458,7 @@ static u32 clear_idx;
 /* record buffer */
 #define LOG_ALIGN __alignof__(struct printk_log)
 #define __LOG_BUF_LEN (1 << CONFIG_LOG_BUF_SHIFT)
-#define LOG_BUF_LEN_MAX (u32)(1 << 31)
+#define LOG_BUF_LEN_MAX ((u32)1 << 31)
 static char __log_buf[__LOG_BUF_LEN] __aligned(LOG_ALIGN);
 static char *log_buf = __log_buf;
 static u32 log_buf_len = __LOG_BUF_LEN;
@@ -614,11 +615,14 @@ static u32 truncate_msg(u16 *text_len, u16 *trunc_msg_len,
 	return msg_used_size(*text_len + *trunc_msg_len, 0, pad_len);
 }
 
+static u64 printk_get_first_ts(void);
+static u64 (*printk_get_ts)(void) = printk_get_first_ts;
+
 /* insert record into the buffer, discard old ones, update heads */
 static int log_store(u32 caller_id, int facility, int level,
 		     enum log_flags flags, u64 ts_nsec,
 		     const char *dict, u16 dict_len,
-		     const char *text, u16 text_len)
+		     const char *text, u16 text_len, int cpu)
 {
 	struct printk_log *msg;
 	u32 size, pad_len;
@@ -659,10 +663,11 @@ static int log_store(u32 caller_id, int facility, int level,
 	msg->facility = facility;
 	msg->level = level & 7;
 	msg->flags = flags & 0x1f;
+	msg->cpu = cpu;
 	if (ts_nsec > 0)
 		msg->ts_nsec = ts_nsec;
 	else
-		msg->ts_nsec = local_clock();
+		msg->ts_nsec = printk_get_ts();
 #ifdef CONFIG_PRINTK_CALLER
 	msg->caller_id = caller_id;
 #endif
@@ -741,8 +746,8 @@ static ssize_t msg_print_ext_header(char *buf, size_t size,
 
 	do_div(ts_usec, 1000);
 
-	return scnprintf(buf, size, "%u,%llu,%llu,%c%s;",
-			 (msg->facility << 3) | msg->level, seq, ts_usec,
+	return scnprintf(buf, size, "%u,%llu,%llu,c%d,%c%s;",
+			 (msg->facility << 3) | msg->level, seq, ts_usec, msg->cpu,
 			 msg->flags & LOG_CONT ? 'c' : '-', caller);
 }
 
@@ -1286,8 +1291,125 @@ static inline void boot_delay_msec(int level)
 }
 #endif
 
-static bool printk_time = IS_ENABLED(CONFIG_PRINTK_TIME);
-module_param_named(time, printk_time, bool, S_IRUGO | S_IWUSR);
+/**
+ * enum timestamp_sources - Timestamp sources for printk() messages.
+ * @PRINTK_TIME_DISABLED: No time stamp.
+ * @PRINTK_TIME_LOCAL: Local hardware clock timestamp.
+ * @PRINTK_TIME_BOOT: Boottime clock timestamp.
+ * @PRINTK_TIME_MONO: Monotonic clock timestamp.
+ * @PRINTK_TIME_REAL: Realtime clock timestamp.
+ */
+enum timestamp_sources {
+	PRINTK_TIME_DISABLED = 0,
+	PRINTK_TIME_LOCAL = 1,
+	PRINTK_TIME_BOOT = 2,
+	PRINTK_TIME_MONO = 3,
+	PRINTK_TIME_REAL = 4,
+};
+
+static const char * const timestamp_sources_str[5] = {
+	"disabled",
+	"local",
+	"boottime",
+	"monotonic",
+	"realtime",
+};
+
+static int printk_time = CONFIG_PRINTK_TIME_TYPE;
+
+static int printk_set_ts_source(enum timestamp_sources ts_source)
+{
+	int err = 0;
+
+	switch (ts_source) {
+		case PRINTK_TIME_LOCAL:
+			printk_get_ts = local_clock;
+			break;
+		case PRINTK_TIME_BOOT:
+			printk_get_ts = ktime_get_boot_fast_ns;
+			break;
+		case PRINTK_TIME_MONO:
+			printk_get_ts = ktime_get_mono_fast_ns;
+			break;
+		case PRINTK_TIME_REAL:
+			printk_get_ts = ktime_get_real_fast_ns;
+			break;
+		case PRINTK_TIME_DISABLED:
+			/*
+			 * The timestamp is always stored into the log buffer.
+			 * Keep the current one.
+			 */
+			break;
+		default:
+			err = -EINVAL;
+			break;
+	}
+
+	if (!err)
+		printk_time = ts_source;
+	return err;
+}
+
+static u64 printk_get_first_ts(void)
+{
+	printk_set_ts_source(printk_time);
+
+	/* Fallback for invalid or disabled timestamp source */
+	if (printk_get_ts == printk_get_first_ts)
+		printk_get_ts = local_clock;
+
+	return printk_get_ts();
+}
+
+static int param_set_time(const char *val, const struct kernel_param *kp)
+{
+	char *param = strstrip((char *)val);
+	int time_source = -1;
+	int ts;
+	int err;
+
+	if (strlen(param) == 1) {
+		/* Preserve legacy boolean settings */
+		if ((param[0] == '0') || (param[0] == 'n') ||
+				(param[0] == 'N'))
+			time_source = PRINTK_TIME_DISABLED;
+		if ((param[0] == '1') || (param[0] == 'y') ||
+				(param[0] == 'Y'))
+			time_source = PRINTK_TIME_LOCAL;
+	}
+	if (time_source == -1) {
+		for (ts = 0; ts < ARRAY_SIZE(timestamp_sources_str); ts++) {
+			if (!strncmp(timestamp_sources_str[ts], param,
+						strlen(param))) {
+				time_source = ts;
+				break;
+			}
+		}
+	}
+
+	err = printk_set_ts_source(time_source);
+	if (err) {
+		pr_warn("printk: invalid timestamp option %s\n", param);
+		return err;
+	}
+
+	pr_info("printk: timestamp set to %s\n",
+			timestamp_sources_str[printk_time]);
+	return 0;
+}
+
+static int param_get_time(char *buffer, const struct kernel_param *kp)
+{
+	return scnprintf(buffer, PAGE_SIZE, "%s",
+			timestamp_sources_str[printk_time]);
+}
+
+static struct kernel_param_ops printk_time_ops = {
+	.set = param_set_time,
+	.get = param_get_time,
+};
+
+module_param_cb(time, &printk_time_ops, NULL, 0644);
 
 static size_t print_syslog(unsigned int level, char *buf)
 {
@@ -1297,6 +1419,9 @@ static size_t print_syslog(unsigned int level, char *buf)
 static size_t print_time(u64 ts, char *buf)
 {
 	unsigned long rem_nsec = do_div(ts, 1000000000);
+
+	if (printk_time == PRINTK_TIME_DISABLED)
+		return 0;
 
 	return sprintf(buf, "[%5lu.%06lu]",
 		       (unsigned long)ts, rem_nsec / 1000);
@@ -1315,6 +1440,17 @@ static size_t print_caller(u32 id, char *buf)
 #define print_caller(id, buf) 0
 #endif
 
+static bool printk_cpuid = IS_ENABLED(CONFIG_PRINTK_CPUID);
+module_param_named(cpuid, printk_cpuid, bool, 0644);
+
+static size_t print_cpu(u32 cpu, char *buf)
+{
+	if (!printk_cpuid)
+		return 0;
+
+	return sprintf(buf, "c%d ", cpu);
+}
+
 static size_t print_prefix(const struct printk_log *msg, bool syslog,
 			   bool time, char *buf)
 {
@@ -1325,6 +1461,8 @@ static size_t print_prefix(const struct printk_log *msg, bool syslog,
 
 	if (time)
 		len += print_time(msg->ts_nsec, buf + len);
+
+	len += print_cpu(msg->cpu, buf + len);
 
 	len += print_caller(msg->caller_id, buf + len);
 
@@ -1787,6 +1925,12 @@ static int console_trylock_spinning(void)
 	 */
 	mutex_acquire(&console_lock_dep_map, 0, 1, _THIS_IP_);
 
+	/*
+	 * Update @console_may_schedule for trylock because the previous
+	 * owner may have been schedulable.
+	 */
+	console_may_schedule = 0;
+
 	return 1;
 }
 
@@ -1856,6 +2000,7 @@ static struct cont {
 	u8 level;			/* log level of first message */
 	u8 facility;			/* log facility of first message */
 	enum log_flags flags;		/* prefix, newline flags */
+	u32 cpu;			/* the print cpu */
 } cont;
 
 static void cont_flush(void)
@@ -1864,7 +2009,7 @@ static void cont_flush(void)
 		return;
 
 	log_store(cont.caller_id, cont.facility, cont.level, cont.flags,
-		  cont.ts_nsec, NULL, 0, cont.buf, cont.len);
+		  cont.ts_nsec, NULL, 0, cont.buf, cont.len, cont.cpu);
 	cont.len = 0;
 }
 
@@ -1881,8 +2026,9 @@ static bool cont_add(u32 caller_id, int facility, int level,
 		cont.facility = facility;
 		cont.level = level;
 		cont.caller_id = caller_id;
-		cont.ts_nsec = local_clock();
+		cont.ts_nsec = printk_get_ts();
 		cont.flags = flags;
+		cont.cpu = smp_processor_id();
 	}
 
 	memcpy(cont.buf + cont.len, text, len);
@@ -1927,7 +2073,7 @@ static size_t log_output(int facility, int level, enum log_flags lflags, const c
 
 	/* Store it in the record log */
 	return log_store(caller_id, facility, level, lflags, 0,
-			 dict, dictlen, text, text_len);
+			 dict, dictlen, text, text_len, smp_processor_id());
 }
 
 /* Must be called under logbuf_lock. */
