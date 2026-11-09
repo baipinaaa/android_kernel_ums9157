@@ -94,6 +94,32 @@ unsigned long total_swapcache_pages(void)
 	}
 	return ret;
 }
+#ifdef CONFIG_SPRD_SYSDUMP
+unsigned long total_swapcache_pages_nolock(void)
+{
+	unsigned int i, j, nr;
+	unsigned long ret = 0;
+	struct address_space *spaces;
+	struct swap_info_struct *si;
+
+	for (i = 0; i < MAX_SWAPFILES; i++) {
+		swp_entry_t entry = swp_entry(i, 1);
+
+		/* Avoid get_swap_device() to warn for bad swap entry */
+		if (!swp_swap_info(entry))
+			continue;
+		/* Prevent swapoff to free swapper_spaces */
+		si = get_swap_device_nolock(entry);
+		if (!si)
+			continue;
+		nr = nr_swapper_spaces[i];
+		spaces = swapper_spaces[i];
+		for (j = 0; j < nr; j++)
+			ret += spaces[j].nrpages;
+	}
+	return ret;
+}
+#endif
 
 static atomic_t swapin_readahead_hits = ATOMIC_INIT(4);
 
@@ -422,9 +448,20 @@ struct page *__read_swap_cache_async(swp_entry_t entry, gfp_t gfp_mask,
 		err = add_to_swap_cache(new_page, entry,
 					gfp_mask & GFP_RECLAIM_MASK);
 		if (likely(!err)) {
+
+#ifdef CONFIG_LRU_BALANCE_BASE_THRASHING
+			/* XXX: Move to lru_cache_add() when it supports new vs putback */
+			spin_lock_irq(&page_pgdat(new_page)->lru_lock);
+			lru_note_cost_page(new_page);
+			spin_unlock_irq(&page_pgdat(new_page)->lru_lock);
+			/* Initiate read into locked page */
+			SetPageWorkingset(new_page);
+			lru_cache_add(new_page);
+#else
 			/* Initiate read into locked page */
 			SetPageWorkingset(new_page);
 			lru_cache_add_anon(new_page);
+#endif
 			*new_page_allocated = true;
 			return new_page;
 		}
@@ -537,7 +574,11 @@ static unsigned long swapin_nr_pages(unsigned long offset)
  * This has been extended to use the NUMA policies from the mm triggering
  * the readahead.
  *
- * Caller must hold read mmap_sem if vmf->vma is not NULL.
+ * Caller must hold down_read on the vma->vm_mm if vmf->vma is not NULL.
+ * This is needed to ensure the VMA will not be freed in our back. In the case
+ * of the speculative page fault handler, this cannot happen, even if we don't
+ * hold the mmap_sem. Callees are assumed to take care of reading VMA's fields
+ * using READ_ONCE() to read consistent values.
  */
 struct page *swap_cluster_readahead(swp_entry_t entry, gfp_t gfp_mask,
 				struct vm_fault *vmf)
@@ -634,9 +675,9 @@ static inline void swap_ra_clamp_pfn(struct vm_area_struct *vma,
 				     unsigned long *start,
 				     unsigned long *end)
 {
-	*start = max3(lpfn, PFN_DOWN(vma->vm_start),
+	*start = max3(lpfn, PFN_DOWN(READ_ONCE(vma->vm_start)),
 		      PFN_DOWN(faddr & PMD_MASK));
-	*end = min3(rpfn, PFN_DOWN(vma->vm_end),
+	*end = min3(rpfn, PFN_DOWN(READ_ONCE(vma->vm_end)),
 		    PFN_DOWN((faddr & PMD_MASK) + PMD_SIZE));
 }
 

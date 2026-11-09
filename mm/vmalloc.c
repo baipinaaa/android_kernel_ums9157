@@ -1678,6 +1678,7 @@ static void _vm_unmap_aliases(unsigned long start, unsigned long end, int flush)
 
 	might_sleep();
 
+	mutex_lock(&vmap_purge_lock);
 	for_each_possible_cpu(cpu) {
 		struct vmap_block_queue *vbq = &per_cpu(vmap_block_queue, cpu);
 		struct vmap_block *vb;
@@ -1702,7 +1703,6 @@ static void _vm_unmap_aliases(unsigned long start, unsigned long end, int flush)
 		rcu_read_unlock();
 	}
 
-	mutex_lock(&vmap_purge_lock);
 	purge_fragmented_blocks_allcpus();
 	if (!__purge_vmap_area_lazy(start, end) && flush)
 		flush_tlb_kernel_range(start, end);
@@ -2137,6 +2137,29 @@ struct vm_struct *find_vm_area(const void *addr)
 }
 
 /**
+ * find_vm_area_no_wait - find a continuous kernel virtual area
+ * @addr:	  base address
+ *
+ * Search for the kernel VM area starting at @addr, and return it.
+ * It is up to the caller to do all required locking to keep the returned
+ * pointer valid. Won't wait if getting vmap_area_lock failed.
+ *
+ * Return: pointer to the found area or %NULL on faulure
+ */
+struct vm_struct *find_vm_area_no_wait(const void *addr)
+{
+	struct vmap_area *va;
+
+	if (spin_trylock(&vmap_area_lock)) {
+		va = __find_vmap_area((unsigned long)addr);
+		spin_unlock(&vmap_area_lock);
+		if (va)
+			return va->vm;
+	}
+	return NULL;
+}
+
+/**
  * remove_vm_area - find and remove a continuous kernel virtual area
  * @addr:	    base address
  *
@@ -2435,6 +2458,10 @@ static void *__vmalloc_area_node(struct vm_struct *area, gfp_t gfp_mask,
 			page = alloc_page(alloc_mask|highmem_mask);
 		else
 			page = alloc_pages_node(node, alloc_mask|highmem_mask, 0);
+
+#ifdef CONFIG_SPRD_PAGE_OWNER
+		SetPagePrivate(page);
+#endif
 
 		if (unlikely(!page)) {
 			/* Successfully allocated i pages, free them in __vunmap() */
@@ -3430,6 +3457,60 @@ void pcpu_free_vm_areas(struct vm_struct **vms, int nr_vms)
 }
 #endif	/* CONFIG_SMP */
 
+#ifdef CONFIG_E_SHOW_MEM
+void print_vmalloc_info(void)
+{
+	struct vmap_area *va;
+	struct vm_struct *v;
+	unsigned long total_pages = 0;
+
+	pr_info("Detail:\n");
+	spin_lock(&vmap_area_lock);
+
+	if (list_empty(&vmap_area_list))
+		goto out;
+
+
+	list_for_each_entry(va, &vmap_area_list, list) {
+		if (!va || !va->vm)
+			continue;
+
+		v = va->vm;
+		if (v->nr_pages) {
+			total_pages += v->nr_pages;
+			/* 128K Bytes */
+			if ((v->nr_pages << (PAGE_SHIFT - 10)) < 128)
+				continue;
+
+			pr_info("0x%p-0x%p %7ld %pS %dkB %s%s\n",
+				v->addr, v->addr + v->size, v->size, v->caller,
+				v->nr_pages << (PAGE_SHIFT - 10),
+				(v->flags & VM_ALLOC) ? "vmalloc" : "",
+				(v->flags & VM_MAP) ? "vmap" : "");
+		}
+	}
+	pr_info("Total used:%lukB\n",
+		(unsigned long)(total_pages << (PAGE_SHIFT - 10)));
+
+out:
+	spin_unlock(&vmap_area_lock);
+}
+
+static int vmalloc_e_show_mem_handler(struct notifier_block *nb,
+			unsigned long val, void *data)
+{
+
+	pr_info("\n");
+	pr_info("Enhanced Mem-info :VMALLOC\n");
+	print_vmalloc_info();
+	return 0;
+}
+
+static struct notifier_block vmalloc_e_show_mem_notifier = {
+	.notifier_call = vmalloc_e_show_mem_handler,
+};
+#endif
+
 #ifdef CONFIG_PROC_FS
 static void *s_start(struct seq_file *m, loff_t *pos)
 	__acquires(&vmap_area_lock)
@@ -3570,6 +3651,9 @@ static int __init proc_vmalloc_init(void)
 				nr_node_ids * sizeof(unsigned int), NULL);
 	else
 		proc_create_seq("vmallocinfo", 0400, NULL, &vmalloc_op);
+#ifdef CONFIG_E_SHOW_MEM
+	register_e_show_mem_notifier(&vmalloc_e_show_mem_notifier);
+#endif
 	return 0;
 }
 module_init(proc_vmalloc_init);
