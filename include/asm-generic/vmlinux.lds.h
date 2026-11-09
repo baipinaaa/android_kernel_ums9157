@@ -1,74 +1,13 @@
-/*
- * Helper macros to support writing architecture specific
- * linker scripts.
- *
- * A minimal linker scripts has following content:
- * [This is a sample, architectures may have special requiriements]
- *
- * OUTPUT_FORMAT(...)
- * OUTPUT_ARCH(...)
- * ENTRY(...)
- * SECTIONS
- * {
- *	. = START;
- *	__init_begin = .;
- *	HEAD_TEXT_SECTION
- *	INIT_TEXT_SECTION(PAGE_SIZE)
- *	INIT_DATA_SECTION(...)
- *	PERCPU_SECTION(CACHELINE_SIZE)
- *	__init_end = .;
- *
- *	_stext = .;
- *	TEXT_SECTION = 0
- *	_etext = .;
- *
- *      _sdata = .;
- *	RO_DATA_SECTION(PAGE_SIZE)
- *	RW_DATA_SECTION(...)
- *	_edata = .;
- *
- *	EXCEPTION_TABLE(...)
- *	NOTES
- *
- *	BSS_SECTION(0, 0, 0)
- *	_end = .;
- *
- *	STABS_DEBUG
- *	DWARF_DEBUG
- *
- *	DISCARDS		// must be the last
- * }
- *
- * [__init_begin, __init_end] is the init section that may be freed after init
- * 	// __init_begin and __init_end should be page aligned, so that we can
- *	// free the whole .init memory
- * [_stext, _etext] is the text section
- * [_sdata, _edata] is the data section
- *
- * Some of the included output section have their own set of constants.
- * Examples are: [__initramfs_start, __initramfs_end] for initramfs and
- *               [__nosave_begin, __nosave_end] for the nosave data
- */
+
 
 #ifndef LOAD_OFFSET
 #define LOAD_OFFSET 0
 #endif
 
-/* Align . to a 8 byte boundary equals to maximum function alignment. */
+
 #define ALIGN_FUNCTION()  . = ALIGN(8)
 
-/*
- * LD_DEAD_CODE_DATA_ELIMINATION option enables -fdata-sections, which
- * generates .data.identifier sections, which need to be pulled in with
- * .data. We don't want to pull in .data..other sections, which Linux
- * has defined. Same for text and bss.
- *
- * With LTO_CLANG, the linker also splits sections by default, so we need
- * these macros to combine the sections during the final link.
- *
- * RODATA_MAIN is not used because existing code already defines .rodata.x
- * sections to be brought in with rodata.
- */
+
 #if defined(CONFIG_LD_DEAD_CODE_DATA_ELIMINATION) || defined(CONFIG_LTO_CLANG)
 #define TEXT_MAIN .text .text.[0-9a-zA-Z_]*
 #define TEXT_CFI_MAIN .text.[0-9a-zA-Z_]*.cfi
@@ -87,17 +26,11 @@
 #define SBSS_MAIN .sbss
 #endif
 
-/*
- * Align to a 32 byte boundary equal to the
- * alignment gcc 4.5 uses for a struct
- */
+
 #define STRUCT_ALIGNMENT 32
 #define STRUCT_ALIGN() . = ALIGN(STRUCT_ALIGNMENT)
 
-/* The actual configuration determine if the init/exit sections
- * are handled as text/data or they can be discarded (which
- * often happens at runtime)
- */
+
 #ifdef CONFIG_HOTPLUG_CPU
 #define CPU_KEEP(sec)    *(.cpu##sec)
 #define CPU_DISCARD(sec)
@@ -115,12 +48,7 @@
 #endif
 
 #ifdef CONFIG_FTRACE_MCOUNT_RECORD
-/*
- * The ftrace call sites are logged to a section whose name depends on the
- * compiler option used. A given kernel image will only use one, AKA
- * FTRACE_CALLSITE_SECTION. We capture all of them here to avoid header
- * dependencies for FTRACE_CALLSITE_SECTION's definition.
- */
+
 #define MCOUNT_REC()	. = ALIGN(8);				\
 			__start_mcount_loc = .;			\
 			KEEP(*(__mcount_loc))			\
@@ -178,10 +106,10 @@
 
 #ifdef CONFIG_TRACING
 #define TRACE_PRINTKS()	 __start___trace_bprintk_fmt = .;      \
-			 KEEP(*(__trace_printk_fmt)) /* Trace_printk fmt' pointer */ \
+			 KEEP(*(__trace_printk_fmt))  \
 			 __stop___trace_bprintk_fmt = .;
 #define TRACEPOINT_STR() __start___tracepoint_str = .;	\
-			 KEEP(*(__tracepoint_str)) /* Trace_printk fmt' pointer */ \
+			 KEEP(*(__tracepoint_str))  \
 			 __stop___tracepoint_str = .;
 #else
 #define TRACE_PRINTKS()
@@ -266,20 +194,51 @@
 #define THERMAL_TABLE(name)
 #endif
 
+#ifdef CONFIG_PGO_CLANG
+#define PGO_CLANG_DATA							\
+	__llvm_prf_data : AT(ADDR(__llvm_prf_data) - LOAD_OFFSET) {	\
+		__llvm_prf_start = .;					\
+		__llvm_prf_data_start = .;				\
+		*(__llvm_prf_data)					\
+		__llvm_prf_data_end = .;				\
+	}								\
+	__llvm_prf_cnts : AT(ADDR(__llvm_prf_cnts) - LOAD_OFFSET) {	\
+		__llvm_prf_cnts_start = .;				\
+		*(__llvm_prf_cnts)					\
+		__llvm_prf_cnts_end = .;				\
+	}								\
+	__llvm_prf_names : AT(ADDR(__llvm_prf_names) - LOAD_OFFSET) {	\
+		__llvm_prf_names_start = .;				\
+		*(__llvm_prf_names)					\
+		__llvm_prf_names_end = .;				\
+	}								\
+	__llvm_prf_vals : AT(ADDR(__llvm_prf_vals) - LOAD_OFFSET) {	\
+		__llvm_prf_vals_start = .;				\
+		*(__llvm_prf_vals)					\
+		__llvm_prf_vals_end = .;				\
+	}								\
+	__llvm_prf_vnds : AT(ADDR(__llvm_prf_vnds) - LOAD_OFFSET) {	\
+		__llvm_prf_vnds_start = .;				\
+		*(__llvm_prf_vnds)					\
+		__llvm_prf_vnds_end = .;				\
+		__llvm_prf_end = .;					\
+	}
+#else
+#define PGO_CLANG_DATA
+#endif
+
 #define KERNEL_DTB()							\
 	STRUCT_ALIGN();							\
 	__dtb_start = .;						\
 	KEEP(*(.dtb.init.rodata))					\
 	__dtb_end = .;
 
-/*
- * .data section
- */
+
 #define DATA_DATA							\
 	*(.xiptext)							\
 	*(DATA_MAIN)							\
 	*(.ref.data)							\
-	*(.data..shared_aligned) /* percpu related */			\
+	*(.data..shared_aligned) 			\
 	MEM_KEEP(init.data*)						\
 	MEM_KEEP(exit.data*)						\
 	*(.data.unlikely)						\
@@ -288,7 +247,7 @@
 	__end_once = .;							\
 	STRUCT_ALIGN();							\
 	*(__tracepoints)						\
-	/* implement dynamic printk debug */				\
+					\
 	. = ALIGN(8);							\
 	__start___verbose = .;						\
 	KEEP(*(__verbose))                                              \
@@ -299,9 +258,7 @@
 	BPF_RAW_TP()							\
 	TRACEPOINT_STR()
 
-/*
- * Data section helpers
- */
+
 #define NOSAVE_DATA							\
 	. = ALIGN(PAGE_SIZE);						\
 	__nosave_begin = .;						\
@@ -339,10 +296,7 @@
 	KEEP(*(__jump_table))						\
 	__stop___jump_table = .;
 
-/*
- * Allow architectures to handle ro_after_init data on their
- * own by defining an empty RO_AFTER_INIT_DATA.
- */
+
 #ifndef RO_AFTER_INIT_DATA
 #define RO_AFTER_INIT_DATA						\
 	. = ALIGN(8);							\
@@ -352,27 +306,25 @@
 	__end_ro_after_init = .;
 #endif
 
-/*
- * Read only Data
- */
+
 #define RO_DATA_SECTION(align)						\
 	. = ALIGN((align));						\
 	.rodata           : AT(ADDR(.rodata) - LOAD_OFFSET) {		\
 		__start_rodata = .;					\
 		*(.rodata) *(.rodata.*)					\
-		RO_AFTER_INIT_DATA	/* Read only after init */	\
+		RO_AFTER_INIT_DATA		\
 		. = ALIGN(8);						\
 		__start___tracepoints_ptrs = .;				\
-		KEEP(*(__tracepoints_ptrs)) /* Tracepoints: pointer array */ \
+		KEEP(*(__tracepoints_ptrs))  \
 		__stop___tracepoints_ptrs = .;				\
-		*(__tracepoints_strings)/* Tracepoints: strings */	\
+		*(__tracepoints_strings)	\
 	}								\
 									\
 	.rodata1          : AT(ADDR(.rodata1) - LOAD_OFFSET) {		\
 		*(.rodata1)						\
 	}								\
 									\
-	/* PCI quirks */						\
+							\
 	.pci_fixup        : AT(ADDR(.pci_fixup) - LOAD_OFFSET) {	\
 		__start_pci_fixups_early = .;				\
 		KEEP(*(.pci_fixup_early))				\
@@ -400,7 +352,7 @@
 		__end_pci_fixups_suspend_late = .;			\
 	}								\
 									\
-	/* Built-in firmware blobs */					\
+						\
 	.builtin_fw : AT(ADDR(.builtin_fw) - LOAD_OFFSET) ALIGN(8) {	\
 		__start_builtin_fw = .;					\
 		KEEP(*(.builtin_fw))					\
@@ -409,96 +361,96 @@
 									\
 	TRACEDATA							\
 									\
-	/* Kernel symbol table: Normal symbols */			\
+				\
 	__ksymtab         : AT(ADDR(__ksymtab) - LOAD_OFFSET) {		\
 		__start___ksymtab = .;					\
 		KEEP(*(SORT(___ksymtab+*)))				\
 		__stop___ksymtab = .;					\
 	}								\
 									\
-	/* Kernel symbol table: GPL-only symbols */			\
+				\
 	__ksymtab_gpl     : AT(ADDR(__ksymtab_gpl) - LOAD_OFFSET) {	\
 		__start___ksymtab_gpl = .;				\
 		KEEP(*(SORT(___ksymtab_gpl+*)))				\
 		__stop___ksymtab_gpl = .;				\
 	}								\
 									\
-	/* Kernel symbol table: Normal unused symbols */		\
+			\
 	__ksymtab_unused  : AT(ADDR(__ksymtab_unused) - LOAD_OFFSET) {	\
 		__start___ksymtab_unused = .;				\
 		KEEP(*(SORT(___ksymtab_unused+*)))			\
 		__stop___ksymtab_unused = .;				\
 	}								\
 									\
-	/* Kernel symbol table: GPL-only unused symbols */		\
+			\
 	__ksymtab_unused_gpl : AT(ADDR(__ksymtab_unused_gpl) - LOAD_OFFSET) { \
 		__start___ksymtab_unused_gpl = .;			\
 		KEEP(*(SORT(___ksymtab_unused_gpl+*)))			\
 		__stop___ksymtab_unused_gpl = .;			\
 	}								\
 									\
-	/* Kernel symbol table: GPL-future-only symbols */		\
+			\
 	__ksymtab_gpl_future : AT(ADDR(__ksymtab_gpl_future) - LOAD_OFFSET) { \
 		__start___ksymtab_gpl_future = .;			\
 		KEEP(*(SORT(___ksymtab_gpl_future+*)))			\
 		__stop___ksymtab_gpl_future = .;			\
 	}								\
 									\
-	/* Kernel symbol table: Normal symbols */			\
+				\
 	__kcrctab         : AT(ADDR(__kcrctab) - LOAD_OFFSET) {		\
 		__start___kcrctab = .;					\
 		KEEP(*(SORT(___kcrctab+*)))				\
 		__stop___kcrctab = .;					\
 	}								\
 									\
-	/* Kernel symbol table: GPL-only symbols */			\
+				\
 	__kcrctab_gpl     : AT(ADDR(__kcrctab_gpl) - LOAD_OFFSET) {	\
 		__start___kcrctab_gpl = .;				\
 		KEEP(*(SORT(___kcrctab_gpl+*)))				\
 		__stop___kcrctab_gpl = .;				\
 	}								\
 									\
-	/* Kernel symbol table: Normal unused symbols */		\
+			\
 	__kcrctab_unused  : AT(ADDR(__kcrctab_unused) - LOAD_OFFSET) {	\
 		__start___kcrctab_unused = .;				\
 		KEEP(*(SORT(___kcrctab_unused+*)))			\
 		__stop___kcrctab_unused = .;				\
 	}								\
 									\
-	/* Kernel symbol table: GPL-only unused symbols */		\
+			\
 	__kcrctab_unused_gpl : AT(ADDR(__kcrctab_unused_gpl) - LOAD_OFFSET) { \
 		__start___kcrctab_unused_gpl = .;			\
 		KEEP(*(SORT(___kcrctab_unused_gpl+*)))			\
 		__stop___kcrctab_unused_gpl = .;			\
 	}								\
 									\
-	/* Kernel symbol table: GPL-future-only symbols */		\
+			\
 	__kcrctab_gpl_future : AT(ADDR(__kcrctab_gpl_future) - LOAD_OFFSET) { \
 		__start___kcrctab_gpl_future = .;			\
 		KEEP(*(SORT(___kcrctab_gpl_future+*)))			\
 		__stop___kcrctab_gpl_future = .;			\
 	}								\
 									\
-	/* Kernel symbol table: strings */				\
+					\
         __ksymtab_strings : AT(ADDR(__ksymtab_strings) - LOAD_OFFSET) {	\
 		*(__ksymtab_strings)					\
 	}								\
 									\
-	/* __*init sections */						\
+							\
 	__init_rodata : AT(ADDR(__init_rodata) - LOAD_OFFSET) {		\
 		*(.ref.rodata)						\
 		MEM_KEEP(init.rodata)					\
 		MEM_KEEP(exit.rodata)					\
 	}								\
 									\
-	/* Built-in module parameters. */				\
+					\
 	__param : AT(ADDR(__param) - LOAD_OFFSET) {			\
 		__start___param = .;					\
 		KEEP(*(__param))					\
 		__stop___param = .;					\
 	}								\
 									\
-	/* Built-in module versions. */					\
+						\
 	__modver : AT(ADDR(__modver) - LOAD_OFFSET) {			\
 		__start___modver = .;					\
 		KEEP(*(__modver))					\
@@ -510,28 +462,18 @@
 	. = ALIGN((align));						\
 	__end_rodata = .;
 
-/* RODATA & RO_DATA provided for backward compatibility.
- * All archs are supposed to use RO_DATA() */
+
 #define RODATA          RO_DATA_SECTION(4096)
 #define RO_DATA(align)  RO_DATA_SECTION(align)
 
-/*
- * Non-instrumentable text section
- */
+
 #define NOINSTR_TEXT							\
 		ALIGN_FUNCTION();					\
 		__noinstr_text_start = .;				\
 		*(.noinstr.text)					\
 		__noinstr_text_end = .;
 
-/*
- * .text section. Map to function alignment to avoid address changes
- * during second ld run in second ld pass when generating System.map
- *
- * TEXT_MAIN here will match .text.fixup and .text.unlikely if dead
- * code elimination is enabled, so these sections should be converted
- * to use ".." first.
- */
+
 #define TEXT_TEXT							\
 		ALIGN_FUNCTION();					\
 		*(.text.hot .text.hot.*)				\
@@ -548,16 +490,14 @@
 	MEM_KEEP(exit.text*)						\
 
 
-/* sched.text is aling to function alignment to secure we have same
- * address even at second ld pass when generating System.map */
+
 #define SCHED_TEXT							\
 		ALIGN_FUNCTION();					\
 		__sched_text_start = .;					\
 		*(.sched.text)						\
 		__sched_text_end = .;
 
-/* spinlock.text is aling to function alignment to secure we have same
- * address even at second ld pass when generating System.map */
+
 #define LOCK_TEXT							\
 		ALIGN_FUNCTION();					\
 		__lock_text_start = .;					\
@@ -594,7 +534,7 @@
 		*(.softirqentry.text)					\
 		__softirqentry_text_end = .;
 
-/* Section used for early init (in .S files) */
+
 #define HEAD_TEXT  KEEP(*(.head.text))
 
 #define HEAD_TEXT_SECTION							\
@@ -602,9 +542,7 @@
 		HEAD_TEXT						\
 	}
 
-/*
- * Exception table
- */
+
 #define EXCEPTION_TABLE(align)						\
 	. = ALIGN(align);						\
 	__ex_table : AT(ADDR(__ex_table) - LOAD_OFFSET) {		\
@@ -613,9 +551,7 @@
 		__stop___ex_table = .;					\
 	}
 
-/*
- * .BTF
- */
+
 #ifdef CONFIG_DEBUG_INFO_BTF
 #define BTF								\
 	.BTF : AT(ADDR(.BTF) - LOAD_OFFSET) {				\
@@ -627,9 +563,7 @@
 #define BTF
 #endif
 
-/*
- * Init task
- */
+
 #define INIT_TASK_DATA_SECTION(align)					\
 	. = ALIGN(align);						\
 	.data..init_task :  AT(ADDR(.data..init_task) - LOAD_OFFSET) {	\
@@ -647,7 +581,7 @@
 #define KERNEL_CTORS()
 #endif
 
-/* init and exit section handling */
+
 #define INIT_DATA							\
 	KEEP(*(SORT(___kentry+*)))					\
 	*(.init.data init.data.*)					\
@@ -694,10 +628,7 @@
 #define EXIT_CALL							\
 	*(.exitcall.exit)
 
-/*
- * bss (Block Started by Symbol) - uninitialized data
- * zeroed during startup
- */
+
 #define SBSS(sbss_align)						\
 	. = ALIGN(sbss_align);						\
 	.sbss : AT(ADDR(.sbss) - LOAD_OFFSET) {				\
@@ -706,10 +637,7 @@
 		*(.scommon)						\
 	}
 
-/*
- * Allow archectures to redefine BSS_FIRST_SECTIONS to add extra
- * sections to the front of bss.
- */
+
 #ifndef BSS_FIRST_SECTIONS
 #define BSS_FIRST_SECTIONS
 #endif
@@ -726,22 +654,18 @@
 		*(COMMON)						\
 	}
 
-/*
- * DWARF debug sections.
- * Symbols in the DWARF debugging sections are relative to
- * the beginning of the section so we begin them at 0.
- */
+
 #define DWARF_DEBUG							\
-		/* DWARF 1 */						\
+								\
 		.debug          0 : { *(.debug) }			\
 		.line           0 : { *(.line) }			\
-		/* GNU DWARF 1 extensions */				\
+						\
 		.debug_srcinfo  0 : { *(.debug_srcinfo) }		\
 		.debug_sfnames  0 : { *(.debug_sfnames) }		\
-		/* DWARF 1.1 and DWARF 2 */				\
+						\
 		.debug_aranges  0 : { *(.debug_aranges) }		\
 		.debug_pubnames 0 : { *(.debug_pubnames) }		\
-		/* DWARF 2 */						\
+								\
 		.debug_info     0 : { *(.debug_info			\
 				.gnu.linkonce.wi.*) }			\
 		.debug_abbrev   0 : { *(.debug_abbrev) }		\
@@ -751,19 +675,19 @@
 		.debug_loc      0 : { *(.debug_loc) }			\
 		.debug_macinfo  0 : { *(.debug_macinfo) }		\
 		.debug_pubtypes 0 : { *(.debug_pubtypes) }		\
-		/* DWARF 3 */						\
+								\
 		.debug_ranges	0 : { *(.debug_ranges) }		\
-		/* SGI/MIPS DWARF 2 extensions */			\
+					\
 		.debug_weaknames 0 : { *(.debug_weaknames) }		\
 		.debug_funcnames 0 : { *(.debug_funcnames) }		\
 		.debug_typenames 0 : { *(.debug_typenames) }		\
 		.debug_varnames  0 : { *(.debug_varnames) }		\
-		/* GNU DWARF 2 extensions */				\
+						\
 		.debug_gnu_pubnames 0 : { *(.debug_gnu_pubnames) }	\
 		.debug_gnu_pubtypes 0 : { *(.debug_gnu_pubtypes) }	\
-		/* DWARF 4 */						\
+								\
 		.debug_types	0 : { *(.debug_types) }			\
-		/* DWARF 5 */						\
+								\
 		.debug_addr	0 : { *(.debug_addr) }			\
 		.debug_line_str	0 : { *(.debug_line_str) }		\
 		.debug_loclists	0 : { *(.debug_loclists) }		\
@@ -772,7 +696,7 @@
 		.debug_rnglists	0 : { *(.debug_rnglists) }		\
 		.debug_str_offsets	0 : { *(.debug_str_offsets) }
 
-		/* Stabs debugging sections.  */
+		
 #define STABS_DEBUG							\
 		.stab 0 : { *(.stab) }					\
 		.stabstr 0 : { *(.stabstr) }				\
@@ -879,14 +803,7 @@
 #define INIT_RAM_FS
 #endif
 
-/*
- * Memory encryption operates on a page basis. Since we need to clear
- * the memory encryption mask for this section, it needs to be aligned
- * on a page boundary and be a page-size multiple in length.
- *
- * Note: We use a separate section so that only this section gets
- * decrypted to avoid exposing more than we wish.
- */
+
 #ifdef CONFIG_AMD_MEM_ENCRYPT
 #define PERCPU_DECRYPTED_SECTION					\
 	. = ALIGN(PAGE_SIZE);						\
@@ -898,15 +815,7 @@
 #endif
 
 
-/*
- * Default discarded sections.
- *
- * Some archs want to discard exit text/data at runtime rather than
- * link time due to cross-section references such as alt instructions,
- * bug table, eh_frame, etc.  DISCARDS must be the last of output
- * section definitions so that such archs put those in earlier section
- * definitions.
- */
+
 #define DISCARDS							\
 	/DISCARD/ : {							\
 	EXIT_TEXT							\
@@ -917,16 +826,7 @@
 	*(.modinfo)							\
 	}
 
-/**
- * PERCPU_INPUT - the percpu input sections
- * @cacheline: cacheline size
- *
- * The core percpu section names and core symbols which do not rely
- * directly upon load addresses.
- *
- * @cacheline is used to align subsections to avoid false cacheline
- * sharing between subsections for different purposes.
- */
+
 #define PERCPU_INPUT(cacheline)						\
 	__per_cpu_start = .;						\
 	*(.data..percpu..first)						\
@@ -940,30 +840,7 @@
 	PERCPU_DECRYPTED_SECTION					\
 	__per_cpu_end = .;
 
-/**
- * PERCPU_VADDR - define output section for percpu area
- * @cacheline: cacheline size
- * @vaddr: explicit base address (optional)
- * @phdr: destination PHDR (optional)
- *
- * Macro which expands to output section for percpu area.
- *
- * @cacheline is used to align subsections to avoid false cacheline
- * sharing between subsections for different purposes.
- *
- * If @vaddr is not blank, it specifies explicit base address and all
- * percpu symbols will be offset from the given address.  If blank,
- * @vaddr always equals @laddr + LOAD_OFFSET.
- *
- * @phdr defines the output PHDR to use if not blank.  Be warned that
- * output PHDR is sticky.  If @phdr is specified, the next output
- * section in the linker script will go there too.  @phdr should have
- * a leading colon.
- *
- * Note that this macros defines __per_cpu_load as an absolute symbol.
- * If there is no need to put the percpu section at a predetermined
- * address, use PERCPU_SECTION.
- */
+
 #define PERCPU_VADDR(cacheline, vaddr, phdr)				\
 	__per_cpu_load = .;						\
 	.data..percpu vaddr : AT(__per_cpu_load - LOAD_OFFSET) {	\
@@ -971,18 +848,7 @@
 	} phdr								\
 	. = __per_cpu_load + SIZEOF(.data..percpu);
 
-/**
- * PERCPU_SECTION - define output section for percpu area, simple version
- * @cacheline: cacheline size
- *
- * Align to PAGE_SIZE and outputs output section for percpu area.  This
- * macro doesn't manipulate @vaddr or @phdr and __per_cpu_load and
- * __per_cpu_start will be identical.
- *
- * This macro is equivalent to ALIGN(PAGE_SIZE); PERCPU_VADDR(@cacheline,,)
- * except that __per_cpu_load is defined as a relative symbol against
- * .data..percpu which is required for relocatable x86_32 configuration.
- */
+
 #define PERCPU_SECTION(cacheline)					\
 	. = ALIGN(PAGE_SIZE);						\
 	.data..percpu	: AT(ADDR(.data..percpu) - LOAD_OFFSET) {	\
@@ -991,24 +857,10 @@
 	}
 
 
-/*
- * Definition of the high level *_SECTION macros
- * They will fit only a subset of the architectures
- */
 
 
-/*
- * Writeable data.
- * All sections are combined in a single .data section.
- * The sections following CONSTRUCTORS are arranged so their
- * typical alignment matches.
- * A cacheline is typical/always less than a PAGE_SIZE so
- * the sections that has this restriction (or similar)
- * is located before the ones requiring PAGE_SIZE alignment.
- * NOSAVE_DATA starts and ends with a PAGE_SIZE alignment which
- * matches the requirement of PAGE_ALIGNED_DATA.
- *
- * use 0 as page_align if page_aligned data is not used */
+
+
 #define RW_DATA_SECTION(cacheline, pagealigned, inittask)		\
 	. = ALIGN(PAGE_SIZE);						\
 	.data : AT(ADDR(.data) - LOAD_OFFSET) {				\
@@ -1021,6 +873,7 @@
 		CONSTRUCTORS						\
 	}								\
 	BUG_TABLE							\
+	PGO_CLANG_DATA
 
 #define INIT_TEXT_SECTION(inittext_align)				\
 	. = ALIGN(inittext_align);					\

@@ -9,14 +9,12 @@
 struct blk_mq_tags;
 struct blk_flush_queue;
 
-/**
- * struct blk_mq_hw_ctx - State for a hardware queue facing the hardware block device
- */
+
 struct blk_mq_hw_ctx {
 	struct {
 		spinlock_t		lock;
 		struct list_head	dispatch;
-		unsigned long		state;		/* BLK_MQ_S_* flags */
+		unsigned long		state;		
 	} ____cacheline_aligned_in_smp;
 
 	struct delayed_work	run_work;
@@ -24,7 +22,7 @@ struct blk_mq_hw_ctx {
 	int			next_cpu;
 	int			next_cpu_batch;
 
-	unsigned long		flags;		/* BLK_MQ_F_* flags */
+	unsigned long		flags;		
 
 	void			*sched_data;
 	struct request_queue	*queue;
@@ -72,7 +70,7 @@ struct blk_mq_hw_ctx {
 
 	struct list_head	hctx_list;
 
-	/* Must be the last member - see also blk_mq_hw_ctx_size(). */
+	
 	struct srcu_struct	srcu[0];
 };
 
@@ -83,30 +81,25 @@ struct blk_mq_queue_map {
 };
 
 enum hctx_type {
-	HCTX_TYPE_DEFAULT,	/* all I/O not otherwise accounted for */
-	HCTX_TYPE_READ,		/* just for READ I/O */
-	HCTX_TYPE_POLL,		/* polled I/O of any kind */
+	HCTX_TYPE_DEFAULT,	
+	HCTX_TYPE_READ,		
+	HCTX_TYPE_POLL,		
 
 	HCTX_MAX_TYPES,
 };
 
 struct blk_mq_tag_set {
-	/*
-	 * map[] holds ctx -> hctx mappings, one map exists for each type
-	 * that the driver wishes to support. There are no restrictions
-	 * on maps being of the same size, and it's perfectly legal to
-	 * share maps between types.
-	 */
+	
 	struct blk_mq_queue_map	map[HCTX_MAX_TYPES];
-	unsigned int		nr_maps;	/* nr entries in map[] */
+	unsigned int		nr_maps;	
 	const struct blk_mq_ops	*ops;
-	unsigned int		nr_hw_queues;	/* nr hw queues across maps */
-	unsigned int		queue_depth;	/* max hw supported */
+	unsigned int		nr_hw_queues;	
+	unsigned int		queue_depth;	
 	unsigned int		reserved_tags;
-	unsigned int		cmd_size;	/* per-request extra data */
+	unsigned int		cmd_size;	
 	int			numa_node;
 	unsigned int		timeout;
-	unsigned int		flags;		/* BLK_MQ_F_* */
+	unsigned int		flags;		
 	void			*driver_data;
 
 	struct blk_mq_tags	**tags;
@@ -144,81 +137,44 @@ typedef void (cleanup_rq_fn)(struct request *);
 
 
 struct blk_mq_ops {
-	/*
-	 * Queue request
-	 */
+	
 	queue_rq_fn		*queue_rq;
 
-	/*
-	 * If a driver uses bd->last to judge when to submit requests to
-	 * hardware, it must define this function. In case of errors that
-	 * make us stop issuing further requests, this hook serves the
-	 * purpose of kicking the hardware (which the last request otherwise
-	 * would have done).
-	 */
+	
 	commit_rqs_fn		*commit_rqs;
 
-	/*
-	 * Reserve budget before queue request, once .queue_rq is
-	 * run, it is driver's responsibility to release the
-	 * reserved budget. Also we have to handle failure case
-	 * of .get_budget for avoiding I/O deadlock.
-	 */
+	
 	get_budget_fn		*get_budget;
 	put_budget_fn		*put_budget;
 
-	/*
-	 * Called on request timeout
-	 */
+	
 	timeout_fn		*timeout;
 
-	/*
-	 * Called to poll for completion of a specific tag.
-	 */
+	
 	poll_fn			*poll;
 
 	complete_fn		*complete;
 
-	/*
-	 * Called when the block layer side of a hardware queue has been
-	 * set up, allowing the driver to allocate/init matching structures.
-	 * Ditto for exit/teardown.
-	 */
+	
 	init_hctx_fn		*init_hctx;
 	exit_hctx_fn		*exit_hctx;
 
-	/*
-	 * Called for every command allocated by the block layer to allow
-	 * the driver to set up driver specific data.
-	 *
-	 * Tag greater than or equal to queue_depth is for setting up
-	 * flush request.
-	 *
-	 * Ditto for exit/teardown.
-	 */
+	
 	init_request_fn		*init_request;
 	exit_request_fn		*exit_request;
-	/* Called from inside blk_get_request() */
+	
 	void (*initialize_rq_fn)(struct request *rq);
 
-	/*
-	 * Called before freeing one request which isn't completed yet,
-	 * and usually for freeing the driver private data
-	 */
+	
 	cleanup_rq_fn		*cleanup_rq;
 
-	/*
-	 * If set, returns whether or not this queue currently is busy
-	 */
+	
 	busy_fn			*busy;
 
 	map_queues_fn		*map_queues;
 
 #ifdef CONFIG_BLK_DEBUG_FS
-	/*
-	 * Used by the debugfs implementation to show driver-specific
-	 * information about a request.
-	 */
+	
 	void (*show_rq)(struct seq_file *m, struct request *rq);
 #endif
 };
@@ -228,6 +184,8 @@ enum {
 	BLK_MQ_F_TAG_SHARED	= 1 << 1,
 	BLK_MQ_F_BLOCKING	= 1 << 5,
 	BLK_MQ_F_NO_SCHED	= 1 << 6,
+	
+	BLK_MQ_F_NO_SCHED_BY_DEFAULT = 1 << 7,
 	BLK_MQ_F_ALLOC_POLICY_START_BIT = 8,
 	BLK_MQ_F_ALLOC_POLICY_BITS = 1,
 
@@ -267,13 +225,13 @@ bool blk_mq_can_queue(struct blk_mq_hw_ctx *);
 bool blk_mq_queue_inflight(struct request_queue *q);
 
 enum {
-	/* return when out of requests */
+	
 	BLK_MQ_REQ_NOWAIT	= (__force blk_mq_req_flags_t)(1 << 0),
-	/* allocate from reserved pool */
+	
 	BLK_MQ_REQ_RESERVED	= (__force blk_mq_req_flags_t)(1 << 1),
-	/* allocate internal/sched tag */
+	
 	BLK_MQ_REQ_INTERNAL	= (__force blk_mq_req_flags_t)(1 << 2),
-	/* set RQF_PREEMPT */
+	
 	BLK_MQ_REQ_PREEMPT	= (__force blk_mq_req_flags_t)(1 << 3),
 };
 
@@ -343,10 +301,7 @@ void blk_mq_quiesce_queue_nowait(struct request_queue *q);
 
 unsigned int blk_mq_rq_cpu(struct request *rq);
 
-/*
- * Driver command data is immediately after the request. So subtract request
- * size to get back to the original request, add request size to get the PDU.
- */
+
 static inline struct request *blk_mq_rq_from_pdu(void *pdu)
 {
 	return pdu - sizeof(struct request);

@@ -124,7 +124,7 @@ TRACE_EVENT(pstate_sample,
 
 );
 
-/* This file can get included multiple times, TRACE_HEADER_MULTI_READ at top */
+
 #ifndef _PWR_EVENT_AVOID_DOUBLE_DEFINING
 #define _PWR_EVENT_AVOID_DOUBLE_DEFINING
 
@@ -279,10 +279,7 @@ DEFINE_EVENT(wakeup_source, wakeup_source_deactivate,
 	TP_ARGS(name, state)
 );
 
-/*
- * The clock events are used for clock enable/disable and for
- *  clock rate change
- */
+
 DECLARE_EVENT_CLASS(clock,
 
 	TP_PROTO(const char *name, unsigned int state, unsigned int cpu_id),
@@ -326,9 +323,7 @@ DEFINE_EVENT(clock, clock_set_rate,
 	TP_ARGS(name, state, cpu_id)
 );
 
-/*
- * The power domain events are used for power domains transitions
- */
+
 DECLARE_EVENT_CLASS(power_domain,
 
 	TP_PROTO(const char *name, unsigned int state, unsigned int cpu_id),
@@ -358,9 +353,7 @@ DEFINE_EVENT(power_domain, power_domain_target,
 	TP_ARGS(name, state, cpu_id)
 );
 
-/*
- * The pm qos events are used for pm qos update
- */
+
 DECLARE_EVENT_CLASS(pm_qos_request,
 
 	TP_PROTO(int pm_qos_class, s32 value),
@@ -525,7 +518,33 @@ DEFINE_EVENT(dev_pm_qos_request, dev_pm_qos_remove_request,
 
 	TP_ARGS(name, type, new_value)
 );
-#endif /* _TRACE_POWER_H */
 
-/* This part must be outside protection */
+
+TRACE_EVENT(sugov_next_freq,
+
+	TP_PROTO(unsigned int cpu, unsigned long util, unsigned long max,
+		 unsigned int freq),
+
+	TP_ARGS(cpu, util, max, freq),
+
+	TP_STRUCT__entry(
+		__field(unsigned int,	cpu)
+		__field(unsigned long,	util)
+		__field(unsigned long,	max)
+		__field(unsigned int,	freq)
+	),
+
+	TP_fast_assign(
+		__entry->cpu		= cpu;
+		__entry->util		= util;
+		__entry->max		= max;
+		__entry->freq		= freq;
+	),
+
+	TP_printk("cpu=%u cpu_util=%lu max=%lu freq=%u",
+		  __entry->cpu, __entry->util, __entry->max, __entry->freq)
+);
+#endif 
+
+
 #include <trace/define_trace.h>

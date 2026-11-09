@@ -13,18 +13,22 @@ struct page_counter {
 	unsigned long max;
 	struct page_counter *parent;
 
-	/* effective memory.min and memory.min usage tracking */
+	
 	unsigned long emin;
 	atomic_long_t min_usage;
 	atomic_long_t children_min_usage;
 
-	/* effective memory.low and memory.low usage tracking */
+	
 	unsigned long elow;
 	atomic_long_t low_usage;
 	atomic_long_t children_low_usage;
 
-	/* legacy */
+	
 	unsigned long watermark;
+
+#ifdef CONFIG_MEMCGV2_DECAYED_WATERMARK
+	unsigned long decayed_watermark;
+#endif
 	unsigned long failcnt;
 };
 
@@ -64,4 +68,4 @@ static inline void page_counter_reset_watermark(struct page_counter *counter)
 	counter->watermark = page_counter_read(counter);
 }
 
-#endif /* _LINUX_PAGE_COUNTER_H */
+#endif 

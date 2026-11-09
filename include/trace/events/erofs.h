@@ -214,10 +214,10 @@ DECLARE_EVENT_CLASS(erofs__map_blocks_exit,
 	),
 
 	TP_printk("dev = (%d,%d), nid = %llu, flags %s "
-		  "la %llu pa %llu llen %llu plen %llu mflags %s ret %d",
+		  "la %llu pa %llu(%llu sectors) llen %llu plen %llu mflags %s ret %d",
 		  show_dev_nid(__entry),
 		  __entry->flags ? show_map_flags(__entry->flags) : "NULL",
-		  __entry->la, __entry->pa, __entry->llen, __entry->plen,
+		  __entry->la, __entry->pa, __entry->pa >> 9, __entry->llen, __entry->plen,
 		  show_mflags(__entry->mflags), __entry->ret)
 );
 
@@ -253,7 +253,7 @@ TRACE_EVENT(erofs_destroy_inode,
 	TP_printk("dev = (%d,%d), nid = %llu", show_dev_nid(__entry))
 );
 
-#endif /* _TRACE_EROFS_H */
+#endif 
 
- /* This part must be outside protection */
+ 
 #include <trace/define_trace.h>

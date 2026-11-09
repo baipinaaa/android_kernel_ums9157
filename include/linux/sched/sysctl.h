@@ -16,7 +16,7 @@ extern int proc_dohung_task_timeout_secs(struct ctl_table *table, int write,
 					 void __user *buffer,
 					 size_t *lenp, loff_t *ppos);
 #else
-/* Avoid need for ifdefs elsewhere in the code */
+
 enum { sysctl_hung_task_timeout_secs = 0 };
 #endif
 
@@ -47,12 +47,7 @@ int sched_proc_update_handler(struct ctl_table *table, int write,
 		loff_t *ppos);
 #endif
 
-/*
- *  control realtime throttling:
- *
- *  /proc/sys/kernel/sched_rt_period_us
- *  /proc/sys/kernel/sched_rt_runtime_us
- */
+
 extern unsigned int sysctl_sched_rt_period;
 extern int sysctl_sched_rt_runtime;
 
@@ -60,6 +55,7 @@ extern int sysctl_sched_rt_runtime;
 extern unsigned int sysctl_sched_uclamp_util_min;
 extern unsigned int sysctl_sched_uclamp_util_max;
 extern unsigned int sysctl_sched_uclamp_util_min_rt_default;
+extern unsigned int sysctl_sched_uclamp_min_to_boost;
 #endif
 
 #ifdef CONFIG_CFS_BANDWIDTH
@@ -102,4 +98,4 @@ extern int sched_energy_aware_handler(struct ctl_table *table, int write,
 				 loff_t *ppos);
 #endif
 
-#endif /* _LINUX_SCHED_SYSCTL_H */
+#endif 

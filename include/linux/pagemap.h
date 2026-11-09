@@ -2,9 +2,7 @@
 #ifndef _LINUX_PAGEMAP_H
 #define _LINUX_PAGEMAP_H
 
-/*
- * Copyright 1995 Linus Torvalds
- */
+
 #include <linux/mm.h>
 #include <linux/fs.h>
 #include <linux/list.h>
@@ -13,50 +11,35 @@
 #include <linux/uaccess.h>
 #include <linux/gfp.h>
 #include <linux/bitops.h>
-#include <linux/hardirq.h> /* for in_interrupt() */
+#include <linux/hardirq.h> 
 #include <linux/hugetlb_inline.h>
 
 struct pagevec;
 
-/*
- * Bits in mapping->flags.
- */
+
 enum mapping_flags {
-	AS_EIO		= 0,	/* IO error on async write */
-	AS_ENOSPC	= 1,	/* ENOSPC on async write */
-	AS_MM_ALL_LOCKS	= 2,	/* under mm_take_all_locks() */
-	AS_UNEVICTABLE	= 3,	/* e.g., ramdisk, SHM_LOCK */
-	AS_EXITING	= 4, 	/* final truncate in progress */
-	/* writeback related tags are not used */
+	AS_EIO		= 0,	
+	AS_ENOSPC	= 1,	
+	AS_MM_ALL_LOCKS	= 2,	
+	AS_UNEVICTABLE	= 3,	
+	AS_EXITING	= 4, 	
+	
 	AS_NO_WRITEBACK_TAGS = 5,
 };
 
-/**
- * mapping_set_error - record a writeback error in the address_space
- * @mapping - the mapping in which an error should be set
- * @error - the error to set in the mapping
- *
- * When writeback fails in some way, we must record that error so that
- * userspace can be informed when fsync and the like are called.  We endeavor
- * to report errors on any file that was open at the time of the error.  Some
- * internal callers also need to know when writeback errors have occurred.
- *
- * When a writeback error occurs, most filesystems will want to call
- * mapping_set_error to record the error in the mapping so that it can be
- * reported when the application calls fsync(2).
- */
+
 static inline void mapping_set_error(struct address_space *mapping, int error)
 {
 	if (likely(!error))
 		return;
 
-	/* Record in wb_err for checkers using errseq_t based tracking */
+	
 	__filemap_set_wb_err(mapping, error);
 
-	/* Record it in superblock */
+	
 	errseq_set(&mapping->host->i_sb->s_wb_err, error);
 
-	/* Record it in flags for now, for legacy callers */
+	
 	if (error == -ENOSPC)
 		set_bit(AS_ENOSPC, &mapping->flags);
 	else
@@ -105,17 +88,14 @@ static inline gfp_t mapping_gfp_mask(struct address_space * mapping)
 	return mapping->gfp_mask;
 }
 
-/* Restricts the given gfp_mask to what the mapping allows. */
+
 static inline gfp_t mapping_gfp_constraint(struct address_space *mapping,
 		gfp_t gfp_mask)
 {
 	return mapping_gfp_mask(mapping) & gfp_mask;
 }
 
-/*
- * This is non-atomic.  Only to be used before the mapping is activated.
- * Probably needs a barrier...
- */
+
 static inline void mapping_set_gfp_mask(struct address_space *m, gfp_t mask)
 {
 	m->gfp_mask = mask;
@@ -123,75 +103,20 @@ static inline void mapping_set_gfp_mask(struct address_space *m, gfp_t mask)
 
 void release_pages(struct page **pages, int nr);
 
-/*
- * speculatively take a reference to a page.
- * If the page is free (_refcount == 0), then _refcount is untouched, and 0
- * is returned. Otherwise, _refcount is incremented by 1 and 1 is returned.
- *
- * This function must be called inside the same rcu_read_lock() section as has
- * been used to lookup the page in the pagecache radix-tree (or page table):
- * this allows allocators to use a synchronize_rcu() to stabilize _refcount.
- *
- * Unless an RCU grace period has passed, the count of all pages coming out
- * of the allocator must be considered unstable. page_count may return higher
- * than expected, and put_page must be able to do the right thing when the
- * page has been finished with, no matter what it is subsequently allocated
- * for (because put_page is what is used here to drop an invalid speculative
- * reference).
- *
- * This is the interesting part of the lockless pagecache (and lockless
- * get_user_pages) locking protocol, where the lookup-side (eg. find_get_page)
- * has the following pattern:
- * 1. find page in radix tree
- * 2. conditionally increment refcount
- * 3. check the page is still in pagecache (if no, goto 1)
- *
- * Remove-side that cares about stability of _refcount (eg. reclaim) has the
- * following (with the i_pages lock held):
- * A. atomically check refcount is correct and set it to 0 (atomic_cmpxchg)
- * B. remove page from pagecache
- * C. free the page
- *
- * There are 2 critical interleavings that matter:
- * - 2 runs before A: in this case, A sees elevated refcount and bails out
- * - A runs before 2: in this case, 2 sees zero refcount and retries;
- *   subsequently, B will complete and 1 will find no page, causing the
- *   lookup to return NULL.
- *
- * It is possible that between 1 and 2, the page is removed then the exact same
- * page is inserted into the same position in pagecache. That's OK: the
- * old find_get_page using a lock could equally have run before or after
- * such a re-insertion, depending on order that locks are granted.
- *
- * Lookups racing against pagecache insertion isn't a big problem: either 1
- * will find the page or it will not. Likewise, the old find_get_page could run
- * either before the insertion or afterwards, depending on timing.
- */
+
 static inline int __page_cache_add_speculative(struct page *page, int count)
 {
 #ifdef CONFIG_TINY_RCU
 # ifdef CONFIG_PREEMPT_COUNT
 	VM_BUG_ON(!in_atomic() && !irqs_disabled());
 # endif
-	/*
-	 * Preempt must be disabled here - we rely on rcu_read_lock doing
-	 * this for us.
-	 *
-	 * Pagecache won't be truncated from interrupt context, so if we have
-	 * found a page in the radix tree here, we have pinned its refcount by
-	 * disabling preempt, and hence no need for the "speculative get" that
-	 * SMP requires.
-	 */
+	
 	VM_BUG_ON_PAGE(page_count(page) == 0, page);
 	page_ref_add(page, count);
 
 #else
 	if (unlikely(!page_ref_add_unless(page, count, 0))) {
-		/*
-		 * Either the page has been freed, or will be freed.
-		 * In either case, retry here and the caller should
-		 * do the right thing (see comments above).
-		 */
+		
 		return 0;
 	}
 #endif
@@ -247,16 +172,7 @@ pgoff_t page_cache_prev_miss(struct address_space *mapping,
 struct page *pagecache_get_page(struct address_space *mapping, pgoff_t offset,
 		int fgp_flags, gfp_t cache_gfp_mask);
 
-/**
- * find_get_page - find and get a page reference
- * @mapping: the address_space to search
- * @offset: the page index
- *
- * Looks up the page cache slot at @mapping & @offset.  If there is a
- * page cache page, it is returned with an increased refcount.
- *
- * Otherwise, %NULL is returned.
- */
+
 static inline struct page *find_get_page(struct address_space *mapping,
 					pgoff_t offset)
 {
@@ -269,44 +185,14 @@ static inline struct page *find_get_page_flags(struct address_space *mapping,
 	return pagecache_get_page(mapping, offset, fgp_flags, 0);
 }
 
-/**
- * find_lock_page - locate, pin and lock a pagecache page
- * @mapping: the address_space to search
- * @offset: the page index
- *
- * Looks up the page cache slot at @mapping & @offset.  If there is a
- * page cache page, it is returned locked and with an increased
- * refcount.
- *
- * Otherwise, %NULL is returned.
- *
- * find_lock_page() may sleep.
- */
+
 static inline struct page *find_lock_page(struct address_space *mapping,
 					pgoff_t offset)
 {
 	return pagecache_get_page(mapping, offset, FGP_LOCK, 0);
 }
 
-/**
- * find_or_create_page - locate or add a pagecache page
- * @mapping: the page's address_space
- * @index: the page's index into the mapping
- * @gfp_mask: page allocation mode
- *
- * Looks up the page cache slot at @mapping & @offset.  If there is a
- * page cache page, it is returned locked and with an increased
- * refcount.
- *
- * If the page is not present, a new page is allocated using @gfp_mask
- * and added to the page cache and the VM's LRU list.  The page is
- * returned locked and with an increased refcount.
- *
- * On memory exhaustion, %NULL is returned.
- *
- * find_or_create_page() may sleep, even if @gfp_flags specifies an
- * atomic allocation!
- */
+
 static inline struct page *find_or_create_page(struct address_space *mapping,
 					pgoff_t offset, gfp_t gfp_mask)
 {
@@ -315,19 +201,7 @@ static inline struct page *find_or_create_page(struct address_space *mapping,
 					gfp_mask);
 }
 
-/**
- * grab_cache_page_nowait - returns locked page at given index in given cache
- * @mapping: target address_space
- * @index: the page index
- *
- * Same as grab_cache_page(), but do not wait if the page is unavailable.
- * This is intended for speculative data generators, where the data can
- * be regenerated if the page couldn't be grabbed.  This routine should
- * be safe to call while holding the lock for another page.
- *
- * Clear __GFP_FS when allocating the page to avoid recursion into the fs
- * and deadlock against the caller's locked page.
- */
+
 static inline struct page *grab_cache_page_nowait(struct address_space *mapping,
 				pgoff_t index)
 {
@@ -377,9 +251,7 @@ static inline unsigned find_get_pages_tag(struct address_space *mapping,
 struct page *grab_cache_page_write_begin(struct address_space *mapping,
 			pgoff_t index, unsigned flags);
 
-/*
- * Returns locked page at given index in given cache, creating it if needed.
- */
+
 static inline struct page *grab_cache_page(struct address_space *mapping,
 								pgoff_t index)
 {
@@ -399,10 +271,7 @@ static inline struct page *read_mapping_page(struct address_space *mapping,
 	return read_cache_page(mapping, index, NULL, data);
 }
 
-/*
- * Get index of the page within radix-tree (but not for hugetlb pages).
- * (TODO: remove once hugetlb pages will have ->index in PAGE_SIZE)
- */
+
 static inline pgoff_t page_to_index(struct page *page)
 {
 	pgoff_t pgoff;
@@ -410,10 +279,7 @@ static inline pgoff_t page_to_index(struct page *page)
 	if (likely(!PageTransTail(page)))
 		return page->index;
 
-	/*
-	 *  We don't initialize ->index for tail pages: calculate based on
-	 *  head page
-	 */
+	
 	pgoff = compound_head(page)->index;
 	pgoff += page - compound_head(page);
 	return pgoff;
@@ -421,10 +287,7 @@ static inline pgoff_t page_to_index(struct page *page)
 
 extern pgoff_t hugetlb_basepage_index(struct page *page);
 
-/*
- * Get the offset in PAGE_SIZE (even for hugetlb pages).
- * (TODO: hugetlb pages should have ->index in PAGE_SIZE)
- */
+
 static inline pgoff_t page_to_pgoff(struct page *page)
 {
 	if (unlikely(PageHuge(page)))
@@ -432,9 +295,7 @@ static inline pgoff_t page_to_pgoff(struct page *page)
 	return page_to_index(page);
 }
 
-/*
- * Return byte-offset into filesystem object for page.
- */
+
 static inline loff_t page_offset(struct page *page)
 {
 	return ((loff_t)page->index) << PAGE_SHIFT;
@@ -454,8 +315,8 @@ static inline pgoff_t linear_page_index(struct vm_area_struct *vma,
 	pgoff_t pgoff;
 	if (unlikely(is_vm_hugetlb_page(vma)))
 		return linear_hugepage_index(vma, address);
-	pgoff = (address - vma->vm_start) >> PAGE_SHIFT;
-	pgoff += vma->vm_pgoff;
+	pgoff = (address - READ_ONCE(vma->vm_start)) >> PAGE_SHIFT;
+	pgoff += READ_ONCE(vma->vm_pgoff);
 	return pgoff;
 }
 
@@ -465,18 +326,14 @@ extern int __lock_page_or_retry(struct page *page, struct mm_struct *mm,
 				unsigned int flags);
 extern void unlock_page(struct page *page);
 
-/*
- * Return true if the page was successfully locked
- */
+
 static inline int trylock_page(struct page *page)
 {
 	page = compound_head(page);
 	return (likely(!test_and_set_bit_lock(PG_locked, &page->flags)));
 }
 
-/*
- * lock_page may only be called if we have the page's inode pinned.
- */
+
 static inline void lock_page(struct page *page)
 {
 	might_sleep();
@@ -484,11 +341,7 @@ static inline void lock_page(struct page *page)
 		__lock_page(page);
 }
 
-/*
- * lock_page_killable is like lock_page but can be interrupted by fatal
- * signals.  It returns 0 if it locked the page and -EINTR if it was
- * killed while waiting.
- */
+
 static inline int lock_page_killable(struct page *page)
 {
 	might_sleep();
@@ -497,13 +350,7 @@ static inline int lock_page_killable(struct page *page)
 	return 0;
 }
 
-/*
- * lock_page_or_retry - Lock the page, unless this would block and the
- * caller indicated that it can handle a retry.
- *
- * Return value and mmap_sem implications depend on flags; see
- * __lock_page_or_retry().
- */
+
 static inline int lock_page_or_retry(struct page *page, struct mm_struct *mm,
 				     unsigned int flags)
 {
@@ -511,20 +358,11 @@ static inline int lock_page_or_retry(struct page *page, struct mm_struct *mm,
 	return trylock_page(page) || __lock_page_or_retry(page, mm, flags);
 }
 
-/*
- * This is exported only for wait_on_page_locked/wait_on_page_writeback, etc.,
- * and should not be used directly.
- */
+
 extern void wait_on_page_bit(struct page *page, int bit_nr);
 extern int wait_on_page_bit_killable(struct page *page, int bit_nr);
 
-/* 
- * Wait for a page to be unlocked.
- *
- * This must be called with the caller "holding" the page,
- * ie with increased "page->count" so that the page won't
- * go away during the wait..
- */
+
 static inline void wait_on_page_locked(struct page *page)
 {
 	if (PageLocked(page))
@@ -546,14 +384,10 @@ void wait_for_stable_page(struct page *page);
 
 void page_endio(struct page *page, bool is_write, int err);
 
-/*
- * Add an arbitrary waiter to a page's wait queue
- */
+
 extern void add_page_wait_queue(struct page *page, wait_queue_entry_t *waiter);
 
-/*
- * Fault everything in given userspace address range in.
- */
+
 static inline int fault_in_pages_writeable(char __user *uaddr, int size)
 {
 	char __user *end = uaddr + size - 1;
@@ -563,17 +397,14 @@ static inline int fault_in_pages_writeable(char __user *uaddr, int size)
 
 	if (unlikely(uaddr > end))
 		return -EFAULT;
-	/*
-	 * Writing zeroes into userspace here is OK, because we know that if
-	 * the zero gets there, we'll be overwriting it.
-	 */
+	
 	do {
 		if (unlikely(__put_user(0, uaddr) != 0))
 			return -EFAULT;
 		uaddr += PAGE_SIZE;
 	} while (uaddr <= end);
 
-	/* Check whether the range spilled into the next page. */
+	
 	if (((unsigned long)uaddr & PAGE_MASK) ==
 			((unsigned long)end & PAGE_MASK))
 		return __put_user(0, end);
@@ -598,7 +429,7 @@ static inline int fault_in_pages_readable(const char __user *uaddr, int size)
 		uaddr += PAGE_SIZE;
 	} while (uaddr <= end);
 
-	/* Check whether the range spilled into the next page. */
+	
 	if (((unsigned long)uaddr & PAGE_MASK) ==
 			((unsigned long)end & PAGE_MASK)) {
 		return __get_user(c, end);
@@ -618,10 +449,7 @@ int replace_page_cache_page(struct page *old, struct page *new, gfp_t gfp_mask);
 void delete_from_page_cache_batch(struct address_space *mapping,
 				  struct pagevec *pvec);
 
-/*
- * Like add_to_page_cache_locked, but used to add newly allocated pages:
- * the page is new, so we can just run __SetPageLocked() against it.
- */
+
 static inline int add_to_page_cache(struct page *page,
 		struct address_space *mapping, pgoff_t offset, gfp_t gfp_mask)
 {
@@ -640,4 +468,4 @@ static inline unsigned long dir_pages(struct inode *inode)
 			       PAGE_SHIFT;
 }
 
-#endif /* _LINUX_PAGEMAP_H */
+#endif 

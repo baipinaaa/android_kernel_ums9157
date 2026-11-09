@@ -1,12 +1,5 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later */
-/* memcontrol.h - Memory Controller
- *
- * Copyright IBM Corporation, 2007
- * Author Balbir Singh <balbir@linux.vnet.ibm.com>
- *
- * Copyright 2007 OpenVZ SWsoft Inc
- * Author: Pavel Emelianov <xemul@openvz.org>
- */
+
 
 #ifndef _LINUX_MEMCONTROL_H
 #define _LINUX_MEMCONTROL_H
@@ -27,14 +20,14 @@ struct page;
 struct mm_struct;
 struct kmem_cache;
 
-/* Cgroup-specific page state, on top of universal node page state */
+
 enum memcg_stat_item {
 	MEMCG_CACHE = NR_VM_NODE_STAT_ITEMS,
 	MEMCG_RSS,
 	MEMCG_RSS_HUGE,
 	MEMCG_SWAP,
 	MEMCG_SOCK,
-	/* XXX: why are these zone and not node counters? */
+	
 	MEMCG_KERNEL_STACK_KB,
 	MEMCG_NR_STAT,
 };
@@ -72,12 +65,7 @@ struct mem_cgroup_id {
 	refcount_t ref;
 };
 
-/*
- * Per memcg event counter is incremented at every pagein/pageout. With THP,
- * it will be incremated by the number of pages. This counter is used for
- * for trigger some periodic events. This is straightforward and better
- * than using jiffies etc. to handle periodic memcg event.
- */
+
 enum mem_cgroup_events_target {
 	MEM_CGROUP_TARGET_THRESH,
 	MEM_CGROUP_TARGET_SOFTLIMIT,
@@ -94,7 +82,7 @@ struct memcg_vmstats_percpu {
 
 struct mem_cgroup_reclaim_iter {
 	struct mem_cgroup *position;
-	/* scan generation, increased every round-trip */
+	
 	unsigned int generation;
 };
 
@@ -102,25 +90,20 @@ struct lruvec_stat {
 	long count[NR_VM_NODE_STAT_ITEMS];
 };
 
-/*
- * Bitmap of shrinker::id corresponding to memcg-aware shrinkers,
- * which have elements charged to this memcg.
- */
+
 struct memcg_shrinker_map {
 	struct rcu_head rcu;
 	unsigned long map[0];
 };
 
-/*
- * per-zone information in memory controller.
- */
+
 struct mem_cgroup_per_node {
 	struct lruvec		lruvec;
 
-	/* Legacy local VM stats */
+	
 	struct lruvec_stat __percpu *lruvec_stat_local;
 
-	/* Subtree VM stats (batched updates) */
+	
 	struct lruvec_stat __percpu *lruvec_stat_cpu;
 	atomic_long_t		lruvec_stat[NR_VM_NODE_STAT_ITEMS];
 
@@ -130,15 +113,15 @@ struct mem_cgroup_per_node {
 
 	struct memcg_shrinker_map __rcu	*shrinker_map;
 
-	struct rb_node		tree_node;	/* RB tree node */
-	unsigned long		usage_in_excess;/* Set to the value by which */
-						/* the soft limit is exceeded*/
+	struct rb_node		tree_node;	
+	unsigned long		usage_in_excess;
+						
 	bool			on_tree;
-	bool			congested;	/* memcg has many dirty pages */
-						/* backed by a congested BDI */
+	bool			congested;	
+						
 
-	struct mem_cgroup	*memcg;		/* Back pointer, we cannot */
-						/* use container_of	   */
+	struct mem_cgroup	*memcg;		
+						
 };
 
 struct mem_cgroup_threshold {
@@ -146,24 +129,20 @@ struct mem_cgroup_threshold {
 	unsigned long threshold;
 };
 
-/* For threshold */
+
 struct mem_cgroup_threshold_ary {
-	/* An array index points to threshold just below or equal to usage. */
+	
 	int current_threshold;
-	/* Size of entries[] */
+	
 	unsigned int size;
-	/* Array of thresholds */
+	
 	struct mem_cgroup_threshold entries[0];
 };
 
 struct mem_cgroup_thresholds {
-	/* Primary thresholds array */
+	
 	struct mem_cgroup_threshold_ary *primary;
-	/*
-	 * Spare threshold array.
-	 * This is needed to make mem_cgroup_unregister_event() "never fail".
-	 * It must be able to store at least primary->size - 1 entries.
-	 */
+	
 	struct mem_cgroup_threshold_ary *spare;
 };
 
@@ -182,113 +161,92 @@ struct memcg_padding {
 #define MEMCG_PADDING(name)
 #endif
 
-/*
- * Remember four most recent foreign writebacks with dirty pages in this
- * cgroup.  Inode sharing is expected to be uncommon and, even if we miss
- * one in a given round, we're likely to catch it later if it keeps
- * foreign-dirtying, so a fairly low count should be enough.
- *
- * See mem_cgroup_track_foreign_dirty_slowpath() for details.
- */
+
 #define MEMCG_CGWB_FRN_CNT	4
 
 struct memcg_cgwb_frn {
-	u64 bdi_id;			/* bdi->id of the foreign inode */
-	int memcg_id;			/* memcg->css.id of foreign inode */
-	u64 at;				/* jiffies_64 at the time of dirtying */
-	struct wb_completion done;	/* tracks in-flight foreign writebacks */
+	u64 bdi_id;			
+	int memcg_id;			
+	u64 at;				
+	struct wb_completion done;	
 };
 
-/*
- * The memory controller data structure. The memory controller controls both
- * page cache and RSS per cgroup. We would eventually like to provide
- * statistics based on the statistics developed by Rik Van Riel for clock-pro,
- * to help the administrator determine what knobs to tune.
- */
+
 struct mem_cgroup {
 	struct cgroup_subsys_state css;
 
-	/* Private memcg ID. Used to ID objects that outlive the cgroup */
+	
 	struct mem_cgroup_id id;
 
-	/* Accounted resources */
+	
 	struct page_counter memory;
 	struct page_counter swap;
 
-	/* Legacy consumer-oriented counters */
+	
 	struct page_counter memsw;
 	struct page_counter kmem;
 	struct page_counter tcpmem;
 
-	/* Upper bound of normal memory consumption range */
+	
 	unsigned long high;
 
-	/* Range enforcement for interrupt charges */
+	
 	struct work_struct high_work;
 
 	unsigned long soft_limit;
 
-	/* vmpressure notifications */
+	
 	struct vmpressure vmpressure;
 
-	/*
-	 * Should the accounting and control be hierarchical, per subtree?
-	 */
+	
 	bool use_hierarchy;
 
-	/*
-	 * Should the OOM killer kill all belonging tasks, had it kill one?
-	 */
+	
 	bool oom_group;
 
-	/* protected by memcg_oom_lock */
+	
 	bool		oom_lock;
 	int		under_oom;
 
 	int	swappiness;
-	/* OOM-Killer disable */
+	
 	int		oom_kill_disable;
 
-	/* memory.events and memory.events.local */
+	
 	struct cgroup_file events_file;
 	struct cgroup_file events_local_file;
 
-	/* handle for "memory.swap.events" */
+	
 	struct cgroup_file swap_events_file;
 
-	/* protect arrays of thresholds */
+	
 	struct mutex thresholds_lock;
 
-	/* thresholds for memory usage. RCU-protected */
+	
 	struct mem_cgroup_thresholds thresholds;
 
-	/* thresholds for mem+swap usage. RCU-protected */
+	
 	struct mem_cgroup_thresholds memsw_thresholds;
 
-	/* For oom notifier event fd */
+	
 	struct list_head oom_notify;
 
-	/*
-	 * Should we move charges of a task when a task is moved into this
-	 * mem_cgroup ? And what type of charges should we move ?
-	 */
+	
 	unsigned long move_charge_at_immigrate;
-	/* taken only while moving_account > 0 */
+	
 	spinlock_t		move_lock;
 	unsigned long		move_lock_flags;
 
 	MEMCG_PADDING(_pad1_);
 
-	/*
-	 * set > 0 if pages under this cgroup are moving to other cgroup.
-	 */
+	
 	atomic_t		moving_account;
 	struct task_struct	*move_lock_task;
 
-	/* Legacy local VM stats and events */
+	
 	struct memcg_vmstats_percpu __percpu *vmstats_local;
 
-	/* Subtree VM stats and events (batched updates) */
+	
 	struct memcg_vmstats_percpu __percpu *vmstats_percpu;
 
 	MEMCG_PADDING(_pad2_);
@@ -296,18 +254,18 @@ struct mem_cgroup {
 	atomic_long_t		vmstats[MEMCG_NR_STAT];
 	atomic_long_t		vmevents[NR_VM_EVENT_ITEMS];
 
-	/* memory.events */
+	
 	atomic_long_t		memory_events[MEMCG_NR_MEMORY_EVENTS];
 	atomic_long_t		memory_events_local[MEMCG_NR_MEMORY_EVENTS];
 
 	unsigned long		socket_pressure;
 
-	/* Legacy tcp memory accounting */
+	
 	bool			tcpmem_active;
 	int			tcpmem_pressure;
 
 #ifdef CONFIG_MEMCG_KMEM
-        /* Index in the kmem_cache->memcg_params.memcg_caches array */
+        
 	int kmemcg_id;
 	enum memcg_kmem_state kmem_state;
 	struct list_head kmem_caches;
@@ -326,7 +284,7 @@ struct mem_cgroup {
 	struct memcg_cgwb_frn cgwb_frn[MEMCG_CGWB_FRN_CNT];
 #endif
 
-	/* List of events which userspace want to receive */
+	
 	struct list_head event_list;
 	spinlock_t event_list_lock;
 
@@ -334,14 +292,21 @@ struct mem_cgroup {
 	struct deferred_split deferred_split_queue;
 #endif
 
+#ifdef CONFIG_MEMCGV2_DECAYED_WATERMARK
+	
+	u64 time_decay_fact;
+	u64 some_prop;
+	u64 full_prop;
+	u64 boost_prop;
+	u64 avg_next_update;
+	u64 avg_last_update;
+#endif
+
 	struct mem_cgroup_per_node *nodeinfo[0];
-	/* WARNING: nodeinfo must be the last member here */
+	
 };
 
-/*
- * size of first charge trial. "32" comes from vmscan.c's magic value.
- * TODO: maybe necessary to use big numbers in big irons.
- */
+
 #define MEMCG_CHARGE_BATCH 32U
 
 extern struct mem_cgroup *root_mem_cgroup;
@@ -366,39 +331,7 @@ static inline void mem_cgroup_protection(struct mem_cgroup *root,
 	if (mem_cgroup_disabled())
 		return;
 
-	/*
-	 * There is no reclaim protection applied to a targeted reclaim.
-	 * We are special casing this specific case here because
-	 * mem_cgroup_protected calculation is not robust enough to keep
-	 * the protection invariant for calculated effective values for
-	 * parallel reclaimers with different reclaim target. This is
-	 * especially a problem for tail memcgs (as they have pages on LRU)
-	 * which would want to have effective values 0 for targeted reclaim
-	 * but a different value for external reclaim.
-	 *
-	 * Example
-	 * Let's have global and A's reclaim in parallel:
-	 *  |
-	 *  A (low=2G, usage = 3G, max = 3G, children_low_usage = 1.5G)
-	 *  |\
-	 *  | C (low = 1G, usage = 2.5G)
-	 *  B (low = 1G, usage = 0.5G)
-	 *
-	 * For the global reclaim
-	 * A.elow = A.low
-	 * B.elow = min(B.usage, B.low) because children_low_usage <= A.elow
-	 * C.elow = min(C.usage, C.low)
-	 *
-	 * With the effective values resetting we have A reclaim
-	 * A.elow = 0
-	 * B.elow = B.low
-	 * C.elow = C.low
-	 *
-	 * If the global reclaim races with A's reclaim then
-	 * B.elow = C.elow = 0 because children_low_usage > A.elow)
-	 * is possible and reclaiming B would be violating the protection.
-	 *
-	 */
+	
 	if (root == memcg)
 		return;
 
@@ -430,15 +363,7 @@ mem_cgroup_nodeinfo(struct mem_cgroup *memcg, int nid)
 	return memcg->nodeinfo[nid];
 }
 
-/**
- * mem_cgroup_lruvec - get the lru list vector for a node or a memcg zone
- * @node: node of the wanted lruvec
- * @memcg: memcg of the wanted lruvec
- *
- * Returns the lru list vector holding pages for a given @node or a given
- * @memcg and @zone. This can be the node lruvec, if the memory controller
- * is disabled.
- */
+
 static inline struct lruvec *mem_cgroup_lruvec(struct pglist_data *pgdat,
 				struct mem_cgroup *memcg)
 {
@@ -453,11 +378,7 @@ static inline struct lruvec *mem_cgroup_lruvec(struct pglist_data *pgdat,
 	mz = mem_cgroup_nodeinfo(memcg, pgdat->node_id);
 	lruvec = &mz->lruvec;
 out:
-	/*
-	 * Since a node can be onlined after the mem_cgroup was created,
-	 * we have to be prepared to initialize lruvec->pgdat here;
-	 * and if offlined then reonlined, we need to reinitialize it.
-	 */
+	
 	if (unlikely(lruvec->pgdat != pgdat))
 		lruvec->pgdat = pgdat;
 	return lruvec;
@@ -517,13 +438,7 @@ static inline struct mem_cgroup *lruvec_memcg(struct lruvec *lruvec)
 	return mz->memcg;
 }
 
-/**
- * parent_mem_cgroup - find the accounting parent of a memcg
- * @memcg: memcg whose parent to find
- *
- * Returns the parent memcg, or NULL if this is the root or the memory
- * controller is in legacy no-hierarchy mode.
- */
+
 static inline struct mem_cgroup *parent_mem_cgroup(struct mem_cgroup *memcg)
 {
 	if (!memcg->memory.parent)
@@ -565,9 +480,7 @@ static inline bool mem_cgroup_online(struct mem_cgroup *memcg)
 	return !!(memcg->css.flags & CSS_ONLINE);
 }
 
-/*
- * For memory reclaim.
- */
+
 int mem_cgroup_select_victim_node(struct mem_cgroup *memcg);
 
 void mem_cgroup_update_lru_size(struct lruvec *lruvec, enum lru_list lru,
@@ -624,10 +537,7 @@ struct mem_cgroup *lock_page_memcg(struct page *page);
 void __unlock_page_memcg(struct mem_cgroup *memcg);
 void unlock_page_memcg(struct page *page);
 
-/*
- * idx can be of type enum memcg_stat_item or node_stat_item.
- * Keep in sync with memcg_exact_page_state().
- */
+
 static inline unsigned long memcg_page_state(struct mem_cgroup *memcg, int idx)
 {
 	long x = atomic_long_read(&memcg->vmstats[idx]);
@@ -638,10 +548,7 @@ static inline unsigned long memcg_page_state(struct mem_cgroup *memcg, int idx)
 	return x;
 }
 
-/*
- * idx can be of type enum memcg_stat_item or node_stat_item.
- * Keep in sync with memcg_exact_page_state().
- */
+
 static inline unsigned long memcg_page_state_local(struct mem_cgroup *memcg,
 						   int idx)
 {
@@ -659,7 +566,7 @@ static inline unsigned long memcg_page_state_local(struct mem_cgroup *memcg,
 
 void __mod_memcg_state(struct mem_cgroup *memcg, int idx, int val);
 
-/* idx can be of type enum memcg_stat_item or node_stat_item */
+
 static inline void mod_memcg_state(struct mem_cgroup *memcg,
 				   int idx, int val)
 {
@@ -670,23 +577,7 @@ static inline void mod_memcg_state(struct mem_cgroup *memcg,
 	local_irq_restore(flags);
 }
 
-/**
- * mod_memcg_page_state - update page state statistics
- * @page: the page
- * @idx: page state item to account
- * @val: number of pages (positive or negative)
- *
- * The @page must be locked or the caller must use lock_page_memcg()
- * to prevent double accounting when the page is concurrently being
- * moved to another memcg:
- *
- *   lock_page(page) or lock_page_memcg(page)
- *   if (TestClearPageState(page))
- *     mod_memcg_page_state(page, state, -1);
- *   unlock_page(page) or unlock_page_memcg(page)
- *
- * Kernel pages are an exception to this, since they'll never move.
- */
+
 static inline void __mod_memcg_page_state(struct page *page,
 					  int idx, int val)
 {
@@ -760,7 +651,7 @@ static inline void __mod_lruvec_page_state(struct page *page,
 	pg_data_t *pgdat = page_pgdat(page);
 	struct lruvec *lruvec;
 
-	/* Untracked pages have no memcg, no lruvec. Update only the node */
+	
 	if (!page->mem_cgroup) {
 		__mod_node_page_state(pgdat, idx, val);
 		return;
@@ -857,7 +748,7 @@ static inline void memcg_memory_event_mm(struct mm_struct *mm,
 void mem_cgroup_split_huge_fixup(struct page *head);
 #endif
 
-#else /* CONFIG_MEMCG */
+#else 
 
 #define MEM_CGROUP_ID_SHIFT	0
 #define MEM_CGROUP_ID_MAX	0
@@ -1000,7 +891,7 @@ static inline unsigned short mem_cgroup_id(struct mem_cgroup *memcg)
 static inline struct mem_cgroup *mem_cgroup_from_id(unsigned short id)
 {
 	WARN_ON_ONCE(id);
-	/* XXX: This should always return root_mem_cgroup */
+	
 	return NULL;
 }
 
@@ -1207,30 +1098,30 @@ static inline
 void count_memcg_event_mm(struct mm_struct *mm, enum vm_event_item idx)
 {
 }
-#endif /* CONFIG_MEMCG */
+#endif 
 
-/* idx can be of type enum memcg_stat_item or node_stat_item */
+
 static inline void __inc_memcg_state(struct mem_cgroup *memcg,
 				     int idx)
 {
 	__mod_memcg_state(memcg, idx, 1);
 }
 
-/* idx can be of type enum memcg_stat_item or node_stat_item */
+
 static inline void __dec_memcg_state(struct mem_cgroup *memcg,
 				     int idx)
 {
 	__mod_memcg_state(memcg, idx, -1);
 }
 
-/* idx can be of type enum memcg_stat_item or node_stat_item */
+
 static inline void __inc_memcg_page_state(struct page *page,
 					  int idx)
 {
 	__mod_memcg_page_state(page, idx, 1);
 }
 
-/* idx can be of type enum memcg_stat_item or node_stat_item */
+
 static inline void __dec_memcg_page_state(struct page *page,
 					  int idx)
 {
@@ -1271,28 +1162,28 @@ static inline void __dec_lruvec_slab_state(void *p, enum node_stat_item idx)
 	__mod_lruvec_slab_state(p, idx, -1);
 }
 
-/* idx can be of type enum memcg_stat_item or node_stat_item */
+
 static inline void inc_memcg_state(struct mem_cgroup *memcg,
 				   int idx)
 {
 	mod_memcg_state(memcg, idx, 1);
 }
 
-/* idx can be of type enum memcg_stat_item or node_stat_item */
+
 static inline void dec_memcg_state(struct mem_cgroup *memcg,
 				   int idx)
 {
 	mod_memcg_state(memcg, idx, -1);
 }
 
-/* idx can be of type enum memcg_stat_item or node_stat_item */
+
 static inline void inc_memcg_page_state(struct page *page,
 					int idx)
 {
 	mod_memcg_page_state(page, idx, 1);
 }
 
-/* idx can be of type enum memcg_stat_item or node_stat_item */
+
 static inline void dec_memcg_page_state(struct page *page,
 					int idx)
 {
@@ -1323,6 +1214,21 @@ static inline void dec_lruvec_page_state(struct page *page,
 	mod_lruvec_page_state(page, idx, -1);
 }
 
+#ifdef CONFIG_LRU_BALANCE_BASE_THRASHING
+static inline struct lruvec *parent_lruvec(struct lruvec *lruvec)
+{
+	struct mem_cgroup *memcg;
+
+	memcg = lruvec_memcg(lruvec);
+	if (!memcg)
+		return NULL;
+	memcg = parent_mem_cgroup(memcg);
+	if (!memcg)
+		return NULL;
+	return mem_cgroup_lruvec(lruvec_pgdat(lruvec), memcg);
+}
+#endif
+
 #ifdef CONFIG_CGROUP_WRITEBACK
 
 struct wb_domain *mem_cgroup_wb_domain(struct bdi_writeback *wb);
@@ -1345,7 +1251,7 @@ static inline void mem_cgroup_track_foreign_dirty(struct page *page,
 
 void mem_cgroup_flush_foreign(struct bdi_writeback *wb);
 
-#else	/* CONFIG_CGROUP_WRITEBACK */
+#else	
 
 static inline struct wb_domain *mem_cgroup_wb_domain(struct bdi_writeback *wb)
 {
@@ -1369,7 +1275,7 @@ static inline void mem_cgroup_flush_foreign(struct bdi_writeback *wb)
 {
 }
 
-#endif	/* CONFIG_CGROUP_WRITEBACK */
+#endif	
 
 struct sock;
 bool mem_cgroup_charge_skmem(struct mem_cgroup *memcg, unsigned int nr_pages);
@@ -1427,11 +1333,7 @@ extern int memcg_nr_cache_ids;
 void memcg_get_cache_ids(void);
 void memcg_put_cache_ids(void);
 
-/*
- * Helper macro to loop through all memcg-specific caches. Callers must still
- * check if the cache is valid (it is either valid or NULL).
- * the slab_mutex must be held when looping through those caches
- */
+
 #define for_each_memcg_cache_index(_idx)	\
 	for ((_idx) = 0; (_idx) < memcg_nr_cache_ids; (_idx)++)
 
@@ -1468,11 +1370,7 @@ static inline void memcg_kmem_uncharge_memcg(struct page *page, int order,
 		__memcg_kmem_uncharge_memcg(memcg, 1 << order);
 }
 
-/*
- * helper for accessing a memcg's index. It will be used as an index in the
- * child cache array in kmem_cache, and also to derive its name. This function
- * will return -1 when this is not a kmem-limited memcg.
- */
+
 static inline int memcg_cache_id(struct mem_cgroup *memcg)
 {
 	return memcg ? memcg->kmemcg_id : -1;
@@ -1526,6 +1424,6 @@ static inline struct mem_cgroup *mem_cgroup_from_obj(void *p)
        return NULL;
 }
 
-#endif /* CONFIG_MEMCG_KMEM */
+#endif 
 
-#endif /* _LINUX_MEMCONTROL_H */
+#endif 

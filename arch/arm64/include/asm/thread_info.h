@@ -1,10 +1,5 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
-/*
- * Based on arch/arm/include/asm/thread_info.h
- *
- * Copyright (C) 2002 Russell King.
- * Copyright (C) 2012 ARM Ltd.
- */
+
 #ifndef __ASM_THREAD_INFO_H
 #define __ASM_THREAD_INFO_H
 
@@ -20,17 +15,15 @@ struct task_struct;
 
 typedef unsigned long mm_segment_t;
 
-/*
- * low level task data that entry.S needs immediate access to.
- */
+
 struct thread_info {
-	unsigned long		flags;		/* low level flags */
-	mm_segment_t		addr_limit;	/* address limit */
+	unsigned long		flags;		
+	mm_segment_t		addr_limit;	
 #ifdef CONFIG_ARM64_SW_TTBR0_PAN
-	u64			ttbr0;		/* saved TTBR0_EL1 */
+	u64			ttbr0;		
 #endif
 	union {
-		u64		preempt_count;	/* 0 => preemptible, <0 => bug */
+		u64		preempt_count;	
 		struct {
 #ifdef CONFIG_CPU_BIG_ENDIAN
 			u32	need_resched;
@@ -60,27 +53,28 @@ void arch_release_task_struct(struct task_struct *tsk);
 
 #endif
 
-#define TIF_SIGPENDING		0	/* signal pending */
-#define TIF_NEED_RESCHED	1	/* rescheduling necessary */
-#define TIF_NOTIFY_RESUME	2	/* callback before returning to user */
-#define TIF_FOREIGN_FPSTATE	3	/* CPU's FP state is not current's */
-#define TIF_UPROBE		4	/* uprobe breakpoint or singlestep */
-#define TIF_FSCHECK		5	/* Check FS is USER_DS on return */
+#define TIF_SIGPENDING		0	
+#define TIF_NEED_RESCHED	1	
+#define TIF_NOTIFY_RESUME	2	
+#define TIF_FOREIGN_FPSTATE	3	
+#define TIF_UPROBE		4	
+#define TIF_FSCHECK		5	
 #define TIF_NOHZ		7
-#define TIF_SYSCALL_TRACE	8	/* syscall trace active */
-#define TIF_SYSCALL_AUDIT	9	/* syscall auditing */
-#define TIF_SYSCALL_TRACEPOINT	10	/* syscall tracepoint for ftrace */
-#define TIF_SECCOMP		11	/* syscall secure computing */
-#define TIF_SYSCALL_EMU		12	/* syscall emulation active */
-#define TIF_MEMDIE		18	/* is terminating due to OOM killer */
+#define TIF_SYSCALL_TRACE	8	
+#define TIF_SYSCALL_AUDIT	9	
+#define TIF_SYSCALL_TRACEPOINT	10	
+#define TIF_SECCOMP		11	
+#define TIF_SYSCALL_EMU		12	
+#define TIF_MEMDIE		18	
 #define TIF_FREEZE		19
 #define TIF_RESTORE_SIGMASK	20
 #define TIF_SINGLESTEP		21
-#define TIF_32BIT		22	/* 32bit process */
-#define TIF_SVE			23	/* Scalable Vector Extension in use */
-#define TIF_SVE_VL_INHERIT	24	/* Inherit sve_vl_onexec across exec */
-#define TIF_SSBD		25	/* Wants SSB mitigation */
-#define TIF_TAGGED_ADDR		26	/* Allow tagged user addresses */
+#define TIF_32BIT		22	
+#define TIF_SVE			23	
+#define TIF_SVE_VL_INHERIT	24	
+#define TIF_SSBD		25	
+#define TIF_TAGGED_ADDR		26	
+#define TIF_MM_RELEASED		27
 
 #define _TIF_SIGPENDING		(1 << TIF_SIGPENDING)
 #define _TIF_NEED_RESCHED	(1 << TIF_NEED_RESCHED)
@@ -113,4 +107,4 @@ void arch_release_task_struct(struct task_struct *tsk);
 	.addr_limit	= KERNEL_DS,					\
 }
 
-#endif /* __ASM_THREAD_INFO_H */
+#endif 
