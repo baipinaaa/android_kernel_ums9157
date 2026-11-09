@@ -3593,7 +3593,7 @@ unsigned int f2fs_usable_blks_in_seg(struct f2fs_sb_info *sbi,
  * checkpoint.c
  */
 void f2fs_stop_checkpoint(struct f2fs_sb_info *sbi, bool end_io,
-			  bool stop_reason);
+			  unsigned char reason);
 /* 设备 kallsyms: ffffffc0107c5058 T f2fs_flush_ckpt_thread */
 void f2fs_flush_ckpt_thread(struct f2fs_sb_info *sbi);
 struct page *f2fs_grab_meta_page(struct f2fs_sb_info *sbi, pgoff_t index);
