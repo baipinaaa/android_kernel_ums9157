@@ -497,6 +497,7 @@ struct binder_proc {
 struct binder_proc_ext {
 	struct binder_proc proc;
 	const struct cred *cred;
+	struct list_head delivered_freeze;
 };
 
 static inline const struct cred *binder_get_cred(struct binder_proc *proc)
@@ -505,6 +506,12 @@ static inline const struct cred *binder_get_cred(struct binder_proc *proc)
 
 	eproc = container_of(proc, struct binder_proc_ext, proc);
 	return eproc->cred;
+}
+
+static inline
+struct binder_proc_ext *proc_wrapper(struct binder_proc *proc)
+{
+	return container_of(proc, struct binder_proc_ext, proc);
 }
 
 /**
