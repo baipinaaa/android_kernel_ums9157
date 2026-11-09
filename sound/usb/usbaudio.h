@@ -183,4 +183,7 @@ struct snd_usb_audio_vendor_ops {
 	ANDROID_KABI_RESERVE(2);
 };
 
+/* vendor audio offload (sprd): 设备 kallsyms T snd_vendor_audio_offload */
+int snd_vendor_audio_offload(int stream);
+
 #endif /* __USBAUDIO_H */

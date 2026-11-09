@@ -412,7 +412,7 @@ static int __init parse_cluster(struct device_node *cluster, int depth)
 	return 0;
 }
 
-static int __init parse_dt_topology(void)
+int __init parse_dt_topology(void)
 {
 	struct device_node *cn, *map;
 	int ret = 0;

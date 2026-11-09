@@ -117,6 +117,11 @@ static void tlb_remove_table_smp_sync(void *arg)
 	/* Simply deliver the interrupt */
 }
 
+void tlb_remove_table_sync_one(void)
+{
+	smp_call_function(tlb_remove_table_smp_sync, NULL, 1);
+}
+
 static void tlb_remove_table_one(void *table)
 {
 	/*
@@ -152,16 +157,6 @@ static void tlb_table_flush(struct mmu_gather *tlb)
 		call_rcu(&(*batch)->rcu, tlb_remove_table_rcu);
 		*batch = NULL;
 	}
-}
-
-static void tlb_remove_table_smp_sync(void *arg)
-{
-	/* Simply deliver the interrupt */
-}
-
-void tlb_remove_table_sync_one(void)
-{
-	smp_call_function(tlb_remove_table_smp_sync, NULL, 1);
 }
 
 void tlb_remove_table(struct mmu_gather *tlb, void *table)

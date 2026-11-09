@@ -2621,3 +2621,47 @@ static inline void membarrier_switch_mm(struct rq *rq,
 {
 }
 #endif
+
+/*
+ * 设备 sched 私有扩展。以下符号均在设备二进制中存在:
+ *   init_sched_groups_capacity  ffffffc01022d1d8 T
+ *   check_for_task_rotation     ffffffc010241158 T
+ *   sched_ktime_clock           ffffffc010241c24 T
+ *   cpu_reserved                ffffffc0123365c0 D (per-cpu)
+ *   min_cap_cpu_mask            ffffffc012510050 B
+ */
+void init_sched_groups_capacity(int cpu, struct sched_domain *sd);
+
+extern struct cpumask min_cap_cpu_mask;
+
+#ifdef CONFIG_SPRD_ROTATION_TASK
+DECLARE_PER_CPU_SHARED_ALIGNED(bool, cpu_reserved);
+static inline bool is_reserved(int cpu)
+{
+	return per_cpu(cpu_reserved, cpu);
+}
+
+static inline void mark_reserved(int cpu)
+{
+	per_cpu(cpu_reserved, cpu) = true;
+}
+
+static inline void clear_reserved(int cpu)
+{
+	per_cpu(cpu_reserved, cpu) = false;
+}
+void check_for_task_rotation(struct rq *src_rq);
+u64 sched_ktime_clock(void);
+#else
+static inline bool is_reserved(int cpu)
+{
+	return false;
+}
+static inline void mark_reserved(int cpu) { }
+static inline void clear_reserved(int cpu) { }
+static inline void check_for_task_rotation(struct rq *src_rq) { }
+static inline u64 sched_ktime_clock(void)
+{
+	return sched_clock();
+}
+#endif

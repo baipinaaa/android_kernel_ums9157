@@ -177,7 +177,7 @@ static void blkcg_ioprio_track(struct rq_qos *rqos, struct request *rq,
 	prio = IOPRIO_PRIO_VALUE(blkcg_ioprio->prio_policy, 0);
 	if (prio > bio->bi_ioprio) {
 		bio->bi_ioprio = prio;
-		rq->rq_flags |= RQF_ELV;
+		rq->rq_flags |= RQF_ELVPRIV;
 	}
 }
 

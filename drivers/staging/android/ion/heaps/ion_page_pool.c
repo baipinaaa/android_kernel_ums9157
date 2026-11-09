@@ -9,8 +9,11 @@
 #include <linux/slab.h>
 #include <linux/swap.h>
 #include <linux/sched/signal.h>
+#include <linux/ion.h>
 
 #include "ion_page_pool.h"
+
+static long ion_pool_total_pages;
 
 static inline struct page *ion_page_pool_alloc_pages(struct ion_page_pool *pool)
 {
@@ -36,6 +39,7 @@ static void ion_page_pool_add(struct ion_page_pool *pool, struct page *page)
 		pool->low_count++;
 	}
 
+	ion_pool_total_pages += 1 << pool->order;
 	mod_node_page_state(page_pgdat(page), NR_KERNEL_MISC_RECLAIMABLE,
 							1 << pool->order);
 	mutex_unlock(&pool->mutex);
@@ -56,12 +60,13 @@ static struct page *ion_page_pool_remove(struct ion_page_pool *pool, bool high)
 	}
 
 	list_del(&page->lru);
+	ion_pool_total_pages -= 1 << pool->order;
 	mod_node_page_state(page_pgdat(page), NR_KERNEL_MISC_RECLAIMABLE,
 							-(1 << pool->order));
 	return page;
 }
 
-struct page *ion_page_pool_alloc(struct ion_page_pool *pool)
+struct page *ion_page_pool_alloc(struct ion_page_pool *pool, bool *from_pool)
 {
 	struct page *page = NULL;
 
@@ -74,8 +79,12 @@ struct page *ion_page_pool_alloc(struct ion_page_pool *pool)
 		page = ion_page_pool_remove(pool, false);
 	mutex_unlock(&pool->mutex);
 
-	if (!page)
+	if (!page) {
 		page = ion_page_pool_alloc_pages(pool);
+		*from_pool = false;
+	} else {
+		*from_pool = true;
+	}
 
 	return page;
 }
@@ -170,3 +179,8 @@ void ion_page_pool_destroy(struct ion_page_pool *pool)
 	kfree(pool);
 }
 EXPORT_SYMBOL_GPL(ion_page_pool_destroy);
+
+long get_ion_pool_total_pages(void)
+{
+	return (ion_pool_total_pages > 0) ? ion_pool_total_pages : 0;
+}

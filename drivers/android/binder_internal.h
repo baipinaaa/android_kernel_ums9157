@@ -533,6 +533,12 @@ static inline const struct cred *binder_get_cred(struct binder_proc *proc)
  *
  * Bookkeeping structure for binder threads.
  */
+enum binder_prio_state {
+	BINDER_PRIO_SET,	/* desired priority set */
+	BINDER_PRIO_PENDING,	/* initiated a saved priority restore */
+	BINDER_PRIO_ABORT,	/* abort the pending priority restore */
+};
+
 struct binder_thread {
 	struct binder_proc *proc;
 	struct rb_node rb_node;
@@ -550,6 +556,10 @@ struct binder_thread {
 	atomic_t tmp_ref;
 	bool is_dead;
 	struct task_struct *task;
+	/* 设备 binder 线程优先级恢复：字段为私有，设备无 sysfs 接口 */
+	spinlock_t prio_lock;
+	struct binder_priority prio_next;
+	enum binder_prio_state prio_state;
 };
 
 /**

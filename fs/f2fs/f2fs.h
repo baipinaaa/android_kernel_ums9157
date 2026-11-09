@@ -238,6 +238,11 @@ enum {
 					 * condition of read on truncated area
 					 * by extent_cache
 					 */
+	DATA_GENERIC_ENHANCE_UPDATE,	/* strong check on range and segment
+					 * bitmap but no warning due to race
+					 * condition of update on truncated
+					 * area by extent_cache
+					 */
 	META_GENERIC,
 };
 

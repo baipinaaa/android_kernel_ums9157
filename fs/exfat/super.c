@@ -89,7 +89,8 @@ static int exfat_statfs(struct dentry *dentry, struct kstatfs *buf)
 	buf->f_blocks = sbi->num_clusters - 2; /* clu 0 & 1 */
 	buf->f_bfree = buf->f_blocks - sbi->used_clusters;
 	buf->f_bavail = buf->f_bfree;
-	buf->f_fsid = u64_to_fsid(id);
+	buf->f_fsid.val[0] = (unsigned int)id;
+	buf->f_fsid.val[1] = (unsigned int)(id >> 32);
 	/* Unicode utf16 255 characters */
 	buf->f_namelen = EXFAT_MAX_FILE_LEN * NLS_MAX_CHARSET_SIZE;
 	return 0;
@@ -225,14 +226,14 @@ enum {
 	Opt_codepage,
 };
 
-static const struct constant_table exfat_param_enums[] = {
-	{ "continue",		EXFAT_ERRORS_CONT },
-	{ "panic",		EXFAT_ERRORS_PANIC },
-	{ "remount-ro",		EXFAT_ERRORS_RO },
+static const struct fs_parameter_enum exfat_param_enums[] = {
+	{ Opt_errors, "continue",	EXFAT_ERRORS_CONT },
+	{ Opt_errors, "panic",		EXFAT_ERRORS_PANIC },
+	{ Opt_errors, "remount-ro",	EXFAT_ERRORS_RO },
 	{}
 };
 
-static const struct fs_parameter_spec exfat_parameters[] = {
+static const struct fs_parameter_spec exfat_param_specs[] = {
 	fsparam_u32("uid",			Opt_uid),
 	fsparam_u32("gid",			Opt_gid),
 	fsparam_u32oct("umask",			Opt_umask),
@@ -240,18 +241,22 @@ static const struct fs_parameter_spec exfat_parameters[] = {
 	fsparam_u32oct("fmask",			Opt_fmask),
 	fsparam_u32oct("allow_utime",		Opt_allow_utime),
 	fsparam_string("iocharset",		Opt_charset),
-	fsparam_enum("errors",			Opt_errors, exfat_param_enums),
+	fsparam_enum("errors",			Opt_errors),
 	fsparam_flag("discard",			Opt_discard),
 	fsparam_s32("time_offset",		Opt_time_offset),
-	__fsparam(NULL, "utf8",			Opt_utf8, fs_param_deprecated,
-		  NULL),
-	__fsparam(NULL, "debug",		Opt_debug, fs_param_deprecated,
-		  NULL),
+	__fsparam(NULL, "utf8",			Opt_utf8, fs_param_deprecated),
+	__fsparam(NULL, "debug",		Opt_debug, fs_param_deprecated),
 	__fsparam(fs_param_is_u32, "namecase",	Opt_namecase,
-		  fs_param_deprecated, NULL),
+		  fs_param_deprecated),
 	__fsparam(fs_param_is_u32, "codepage",	Opt_codepage,
-		  fs_param_deprecated, NULL),
+		  fs_param_deprecated),
 	{}
+};
+
+static const struct fs_parameter_description exfat_parameters = {
+	.name		= "exfat",
+	.specs		= exfat_param_specs,
+	.enums		= exfat_param_enums,
 };
 
 static int exfat_parse_param(struct fs_context *fc, struct fs_parameter *param)
@@ -261,7 +266,7 @@ static int exfat_parse_param(struct fs_context *fc, struct fs_parameter *param)
 	struct fs_parse_result result;
 	int opt;
 
-	opt = fs_parse(fc, exfat_parameters, param, &result);
+	opt = fs_parse(fc, &exfat_parameters, param, &result);
 	if (opt < 0)
 		return opt;
 
