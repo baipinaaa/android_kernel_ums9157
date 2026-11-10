@@ -4469,11 +4469,6 @@ static int sc27xx_fgu_parse_sprd_battery_info(struct sc27xx_fgu_data *data,
 	else
 		dev_warn(data->dev, "no fgu charge_full_design_uah support\n");
 
-	if (info->charge_full_uah > 0)
-		data->total_mah = info->charge_full_uah / 1000;
-	else
-		dev_warn(data->dev, "no fgu charge_full_uah support\n");
-
 	if (info->constant_charge_voltage_max_uv > 0)
 		data->max_volt_uv = info->constant_charge_voltage_max_uv;
 	else
@@ -4489,8 +4484,6 @@ static int sc27xx_fgu_parse_sprd_battery_info(struct sc27xx_fgu_data *data,
 	else
 		dev_warn(data->dev, "no fgu voltage_min_design_uv support\n");
 
-	data->batt_id_index = info->batt_id_index;
-
 	sc27xx_fgu_dump_battery_info(data, "parse_resistance_table");
 
 	return 0;
@@ -4501,8 +4494,6 @@ static int sc27xx_fgu_hw_init(struct sc27xx_fgu_data *data,
 {
 	int ret, delta_clbcnt, alarm_adc;
 	struct sprd_battery_info info = {};
-
-	info.batt_id_cha = data->batt_id_cha;
 
 	data->cur_now_buff[SC27XX_FGU_CURRENT_BUFF_CNT - 1] = SC27XX_FGU_MAGIC_NUMBER;
 

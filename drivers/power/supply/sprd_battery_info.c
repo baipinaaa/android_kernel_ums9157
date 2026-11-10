@@ -75,85 +75,14 @@ static int sprd_battery_parse_cmdline_match(struct power_supply *psy,
 	return 0;
 }
 */
-static int sprd_battery_get_batt_id_kohm(struct power_supply *psy, struct sprd_battery_info *data)
+
+
+int sprd_battery_parse_battery_id(struct power_supply *psy)
 {
-	int vol, batt_id_kohm, ret;
-
-	if (IS_ERR_OR_NULL(data->batt_id_cha)) {
-		dev_warn(&psy->dev, "%s batt id channel is not defined!\n", __func__);
-		return -ENODEV;
-	}
-
-	ret = iio_read_channel_processed(data->batt_id_cha, &vol);
-	if (ret < 0) {
-		dev_warn(&psy->dev, "%s batt id channel read failed!\n", __func__);
-		return ret;
-	}
-
-	batt_id_kohm = DIV_ROUND_CLOSEST((vol * VOL_V_PER_MV * BAT_ID_PULL_UP),
-		(BAT_ID_REF_VOL * VOL_V_PER_MV - vol * VOL_V_PER_MV));
-
-	dev_info(&psy->dev, "%s batt id:%d kohm, vol:%d mv\n", __func__, batt_id_kohm, vol);
-
-	return batt_id_kohm;
-}
-
-
-int sprd_battery_parse_battery_id(struct power_supply *psy, struct sprd_battery_info *data)
-{
-	int len = 0, i = 0;
-	struct device_node *battery_np = NULL;
-
-	data->batt_id_index = 0;
-	data->batt_id_kohm = sprd_battery_get_batt_id_kohm(psy, data);
-
-	if (data->batt_id_kohm < 0) {
-		dev_warn(&psy->dev, "%s batt id channel read failed, use index 0!\n", __func__);
-		return -EINVAL;
-	}
-
-	battery_np = of_parse_phandle(psy->of_node, "monitored-battery", 0);
-	if (!battery_np) {
-		dev_err(&psy->dev, "not found battery_np for batt id check\n");
-		return -ENODEV;
-	}
-
-	if (of_get_property(battery_np, "batt-id-list", &len)) {
-		len /= sizeof(u32);
-		data->batt_id_list =
-			kzalloc(sizeof(int) * len, GFP_KERNEL);
-		if (!data->batt_id_list)
-			return -ENOMEM;
-		dev_info(&psy->dev, "batt-id-list num: %d\n", len);
-		for (i = 0; i < len; i++) {
-			if (of_property_read_u32_index(battery_np, "batt-id-list",
-				i, &data->batt_id_list[i])) {
-				dev_err(&psy->dev, "parse bat-id-list err\n");
-			}
-			dev_info(&psy->dev, "batt_id_list[%d]=%d K\n", i, data->batt_id_list[i]);
-		}
-
-		for (i = 0; i < len; i++) {
-			/* batt id is in + - 20%
-			*  and if batt id is 0 komh, we use 0-5k as the scope, so, +5
-			*/
-			if (data->batt_id_kohm >= data->batt_id_list[i] * 80/100
-				&& data->batt_id_kohm <= data->batt_id_list[i] * 120/100) {
-				data->batt_id_index = i;
-				dev_info(&psy->dev, "batt id: %dk, near the batt_id_list[%d]: %dk\n",
-					data->batt_id_kohm, data->batt_id_index, data->batt_id_list[i]);
-				break;
-			}
-		}
-
-		if (i >= len)
-			dev_info(&psy->dev, "batt id: %dk, not found the best index, use index 0\n",
-							data->batt_id_kohm);
-	} else {
-		dev_info(&psy->dev, "batt id: %dk, no batt id list, use index 0\n", data->batt_id_kohm);
-		return -ENOMEM;
-	}
-
+	/* 设备内核的 struct sprd_battery_info 没有 batt_id_* 成员
+	 * （kheaders 真身里只有 charge_full_design_uah），设备驱动也没有
+	 * 电池 ID 识别逻辑，这里保留符号供调用者链接。
+	 */
 	return 0;
 }
 
@@ -802,7 +731,7 @@ int sprd_battery_get_battery_info(struct power_supply *psy, struct sprd_battery_
 		return -ENXIO;
 	}
 
-	sprd_battery_parse_battery_id(psy, info);
+	sprd_battery_parse_battery_id(psy);
 
 	dev_warn(&psy->dev, "%s info->batt_id_index=%d\n", __func__, info->batt_id_index);
 
@@ -1044,7 +973,7 @@ int sprd_battery_get_battery_info_sqc(struct power_supply *psy, struct sprd_batt
 	}
 
 	if (!strcmp(psy->desc->name, "sc27xx-fgu")) {
-		sprd_battery_parse_battery_id(psy, info);
+		sprd_battery_parse_battery_id(psy);
 	}
 
 	dev_warn(&psy->dev, "%s info->batt_id_index=%d\n", __func__, info->batt_id_index);

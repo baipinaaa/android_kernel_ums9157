@@ -11,6 +11,7 @@ enum usb_charger_type {
 	CDP_TYPE = 3,
 	ACA_TYPE = 4,
 };
+#define NON_DCP_TYPE  (ACA_TYPE+1)
 
 
 enum usb_charger_state {
