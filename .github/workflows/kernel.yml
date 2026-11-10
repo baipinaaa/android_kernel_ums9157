@@ -131,13 +131,14 @@ jobs:
       - name: 校验 vermagic 与设备一致
         if: always()
         run: |
-          # 设备: 5.4.210-android12-9-g96901d45d5a5-ab50 SMP preempt mod_unload aarch64
+          # 设备: 5.4.210-android12-9-g96901d45d5a5-ab50 SMP preempt mod_unload modversions aarch64
+          # 依据: 设备 Image @0xffffffc011d9f518 与全部 157 个原厂 .ko 均为该串（含 modversions）
           KO=$(find . -name 'dwc3-sprd-core.ko' | head -1)
           if [ -n "$KO" ]; then
             VM=$(strings -a "$KO" | grep -m1 '^vermagic=')
             echo "got: $VM"
             case "$VM" in
-              "vermagic=5.4.210-android12-9-g96901d45d5a5-ab50 SMP preempt mod_unload aarch64")
+              "vermagic=5.4.210-android12-9-g96901d45d5a5-ab50 SMP preempt mod_unload modversions aarch64")
                 echo "OK: vermagic 与设备逐字符一致" ;;
               *)
                 echo "::error::vermagic 与设备不一致: $VM"
