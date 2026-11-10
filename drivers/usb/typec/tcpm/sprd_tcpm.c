@@ -31,107 +31,6 @@
 #include <linux/usb/typec_altmode.h>
 #include <linux/workqueue.h>
 
-static const char * const sprd_tcpm_states[] = {
-	"INVALID_STATE",				/* = 0 */
-	"TOGGLING",
-	"SRC_UNATTACHED",
-	"SRC_ATTACH_WAIT",
-	"SRC_ATTACHED",
-	"SRC_STARTUP",					/* = 5 */
-	"SRC_SEND_CAPABILITIES",
-	"SRC_SEND_CAPABILITIES_TIMEOUT",
-	"SRC_NEGOTIATE_CAPABILITIES",
-	"SRC_TRANSITION_SUPPLY",
-	"SRC_READY",					/* = 10 */
-	"SRC_WAIT_NEW_CAPABILITIES",
-
-	"SNK_UNATTACHED",
-	"SNK_ATTACH_WAIT",
-	"SNK_DEBOUNCED",
-	"SNK_ATTACHED",					/* = 15 */
-	"SNK_STARTUP",
-	"SNK_DISCOVERY",
-	"SNK_DISCOVERY_DEBOUNCE",
-	"SNK_DISCOVERY_DEBOUNCE_DONE",
-	"SNK_WAIT_CAPABILITIES",			/* = 20 */
-	"SNK_NEGOTIATE_CAPABILITIES",
-	"SNK_NEGOTIATE_PPS_CAPABILITIES",
-	"SNK_TRANSITION_SINK",
-	"SNK_TRANSITION_SINK_VBUS",
-	"SNK_READY",					/* = 25 */
-
-	"ACC_UNATTACHED",
-	"DEBUG_ACC_ATTACHED",
-	"AUDIO_ACC_ATTACHED",
-	"AUDIO_ACC_DEBOUNCE",
-
-	"HARD_RESET_SEND",				/* = 30 */
-	"HARD_RESET_START",
-	"SRC_HARD_RESET_VBUS_OFF",
-	"SRC_HARD_RESET_VBUS_ON",
-	"SNK_HARD_RESET_SINK_OFF",
-	"SNK_HARD_RESET_WAIT_VBUS",			/* = 35 */
-	"SNK_HARD_RESET_SINK_ON",
-
-	"SOFT_RESET",
-	"SOFT_RESET_SEND",
-
-	"DR_SWAP_ACCEPT",
-	"DR_SWAP_SEND",					/* = 40 */
-	"DR_SWAP_SEND_TIMEOUT",
-	"DR_SWAP_CANCEL",
-	"DR_SWAP_CHANGE_DR",
-
-	"PR_SWAP_ACCEPT",
-	"PR_SWAP_SEND",					/* = 45 */
-	"PR_SWAP_SEND_TIMEOUT",
-	"PR_SWAP_CANCEL",
-	"PR_SWAP_START",
-	"PR_SWAP_SRC_SNK_TRANSITION_OFF",
-	"PR_SWAP_SRC_SNK_SOURCE_OFF",			/* = 50 */
-	"PR_SWAP_SRC_SNK_SOURCE_OFF_CC_DEBOUNCED",
-	"PR_SWAP_SRC_SNK_SINK_ON",
-	"PR_SWAP_SNK_SRC_SINK_OFF",
-	"PR_SWAP_SNK_SRC_SOURCE_ON",
-	"PR_SWAP_SNK_SRC_SOURCE_ON_VBUS_RAMPED_UP",	/* = 55 */
-
-	"VCONN_SWAP_ACCEPT",
-	"VCONN_SWAP_SEND",
-	"VCONN_SWAP_SEND_TIMEOUT",
-	"VCONN_SWAP_CANCEL",
-	"VCONN_SWAP_START",				/* = 60 */
-	"VCONN_SWAP_WAIT_FOR_VCONN",
-	"VCONN_SWAP_TURN_ON_VCONN",
-	"VCONN_SWAP_TURN_OFF_VCONN",
-
-	"SNK_TRY",
-	"SNK_TRY_WAIT",					/* = 65 */
-	"SNK_TRY_WAIT_DEBOUNCE",
-	"SNK_TRY_WAIT_DEBOUNCE_CHECK_VBUS",
-	"SRC_TRYWAIT",
-	"SRC_TRYWAIT_DEBOUNCE",
-	"SRC_TRYWAIT_UNATTACHED",			/* = 70 */
-
-	"SRC_TRY",
-	"SRC_TRY_WAIT",
-	"SRC_TRY_DEBOUNCE",
-	"SNK_TRYWAIT",
-	"SNK_TRYWAIT_DEBOUNCE",				/* = 75 */
-	"SNK_TRYWAIT_VBUS",
-	"BIST_RX",
-
-	"GET_STATUS_SEND",
-	"GET_STATUS_SEND_TIMEOUT",
-	"GET_PPS_STATUS_SEND",				/* = 80 */
-	"GET_PPS_STATUS_SEND_TIMEOUT",
-
-	"ERROR_RECOVERY",
-	"PORT_RESET",
-	"PORT_RESET_WAIT_OFF",
-};
-
-
-
 /* Events from low level driver */
 
 #define SPRD_TCPM_CC_EVENT		BIT(0)
@@ -5535,10 +5434,10 @@ EXPORT_SYMBOL_GPL(sprd_tcpm_unregister_port);
  * with __LINE__ (fmt is "%s:line%d ..."), and writing __LINE__ ourselves would
  * produce different numbers and therefore a different binary.
  */
-static void *g_sprd_charger_ops;
-static void *g_sprd_typec_device_ops;
+static struct sprd_charger_ops *g_sprd_charger_ops;
+static struct sprd_typec_device_ops *g_sprd_typec_device_ops;
 
-int sprd_tcpm_charger_ops_register(void *ops)
+int sprd_tcpm_charger_ops_register(struct sprd_charger_ops *ops)
 {
 	if (!ops) {
 		pr_err("%s:line%d charger ops register failed\n", __func__, __LINE__);
@@ -5551,7 +5450,7 @@ int sprd_tcpm_charger_ops_register(void *ops)
 }
 EXPORT_SYMBOL_GPL(sprd_tcpm_charger_ops_register);
 
-int sprd_tcpm_typec_device_ops_register(void *ops)
+int sprd_tcpm_typec_device_ops_register(struct sprd_typec_device_ops *ops)
 {
 	if (!ops) {
 		pr_err("%s:line%d typec device ops register failed\n", __func__, __LINE__);

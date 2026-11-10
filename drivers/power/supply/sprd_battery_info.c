@@ -674,7 +674,6 @@ int sprd_battery_get_battery_info(struct power_supply *psy, struct sprd_battery_
 	int err, index;
 
 	info->charge_full_design_uah         = -EINVAL;
-	info->charge_full_uah         = -EINVAL;
 	info->voltage_min_design_uv          = -EINVAL;
 	info->batt_ovp_threshold_uv          = -EINVAL;
 	info->precharge_current_ua           = -EINVAL;
@@ -711,9 +710,7 @@ int sprd_battery_get_battery_info(struct power_supply *psy, struct sprd_battery_
 	info->cur.wl_bpp_limit = -EINVAL;
 	info->cur.wl_epp_cur = -EINVAL;
 	info->cur.wl_epp_limit = -EINVAL;
-	info->batt_id_index = 0;
 
-	info->fullbatt_advance_level = FULLBATT_ADVANCE_LEVEL;
 
 	for (index = 0; index < SPRD_BATTERY_INFO_RESISTENCE_TEMP_MAX; index++) {
 		info->battery_internal_resistance_temp_table[index] = -EINVAL;
@@ -733,11 +730,10 @@ int sprd_battery_get_battery_info(struct power_supply *psy, struct sprd_battery_
 
 	sprd_battery_parse_battery_id(psy);
 
-	dev_warn(&psy->dev, "%s info->batt_id_index=%d\n", __func__, info->batt_id_index);
 
-	battery_np = of_parse_phandle(psy->of_node, "monitored-battery", info->batt_id_index);
+	battery_np = of_parse_phandle(psy->of_node, "monitored-battery", 0);
 	if (!battery_np) {
-		dev_warn(&psy->dev, "Fail to get monitored-battery-id-%d\n", info->batt_id_index);
+		dev_warn(&psy->dev, "Fail to get monitored-battery\n");
 		return -ENODEV;
 	}
 
@@ -750,11 +746,6 @@ int sprd_battery_get_battery_info(struct power_supply *psy, struct sprd_battery_
 
 	of_property_read_u32(battery_np, "charge-full-design-microamp-hours",
 			     &info->charge_full_design_uah);
-	err = of_property_read_u32(battery_np, "charge-full-microamp-hours",
-			     &info->charge_full_uah);
-	if (err) {
-		info->charge_full_uah = info->charge_full_design_uah;
-	}
 	of_property_read_u32(battery_np, "voltage-min-design-microvolt",
 			     &info->voltage_min_design_uv);
 	of_property_read_u32(battery_np, "batt-ovp-threshold-microvolt",
@@ -792,7 +783,6 @@ int sprd_battery_get_battery_info(struct power_supply *psy, struct sprd_battery_
 			     &info->ir.us_upper_limit_uv);
 	of_property_read_u32(battery_np, "ir-cv-offset-microvolt",
 			     &info->ir.cv_upper_limit_offset_uv);
-	of_property_read_u32(battery_np, "fullbatt-advance-level", &info->fullbatt_advance_level);
 
 	of_property_read_u32_index(battery_np, "charge-sdp-current-microamp", 0,
 				   &info->cur.sdp_cur);
@@ -911,7 +901,6 @@ int sprd_battery_get_battery_info_sqc(struct power_supply *psy, struct sprd_batt
 	int err, index;
 
 	info->charge_full_design_uah         = -EINVAL;
-	info->charge_full_uah         = -EINVAL;
 	info->voltage_min_design_uv          = -EINVAL;
 	info->batt_ovp_threshold_uv          = -EINVAL;
 	info->precharge_current_ua           = -EINVAL;
@@ -948,13 +937,6 @@ int sprd_battery_get_battery_info_sqc(struct power_supply *psy, struct sprd_batt
 	info->cur.wl_bpp_limit = -EINVAL;
 	info->cur.wl_epp_cur = -EINVAL;
 	info->cur.wl_epp_limit = -EINVAL;
-	if (!strcmp(psy->desc->name, "sc27xx-fgu")) {
-		info->batt_id_index = 0;
-	} else {
-		info->batt_id_index = battery_id;
-	}
-
-	info->fullbatt_advance_level = FULLBATT_ADVANCE_LEVEL;
 
 	for (index = 0; index < SPRD_BATTERY_INFO_RESISTENCE_TEMP_MAX; index++) {
 		info->battery_internal_resistance_temp_table[index] = -EINVAL;
@@ -972,15 +954,9 @@ int sprd_battery_get_battery_info_sqc(struct power_supply *psy, struct sprd_batt
 		return -ENXIO;
 	}
 
-	if (!strcmp(psy->desc->name, "sc27xx-fgu")) {
-		sprd_battery_parse_battery_id(psy);
-	}
-
-	dev_warn(&psy->dev, "%s info->batt_id_index=%d\n", __func__, info->batt_id_index);
-
-	battery_np = of_parse_phandle(psy->of_node, "monitored-battery", info->batt_id_index);
+	battery_np = of_parse_phandle(psy->of_node, "monitored-battery", 0);
 	if (!battery_np) {
-		dev_warn(&psy->dev, "Fail to get monitored-battery-id-%d\n", info->batt_id_index);
+		dev_warn(&psy->dev, "Fail to get monitored-battery\n");
 		return -ENODEV;
 	}
 
@@ -993,11 +969,6 @@ int sprd_battery_get_battery_info_sqc(struct power_supply *psy, struct sprd_batt
 
 	of_property_read_u32(battery_np, "charge-full-design-microamp-hours",
 			     &info->charge_full_design_uah);
-	err = of_property_read_u32(battery_np, "charge-full-microamp-hours",
-			     &info->charge_full_uah);
-	if (err) {
-		info->charge_full_uah = info->charge_full_design_uah;
-	}
 	of_property_read_u32(battery_np, "voltage-min-design-microvolt",
 			     &info->voltage_min_design_uv);
 	of_property_read_u32(battery_np, "batt-ovp-threshold-microvolt",
@@ -1035,7 +1006,6 @@ int sprd_battery_get_battery_info_sqc(struct power_supply *psy, struct sprd_batt
 			     &info->ir.us_upper_limit_uv);
 	of_property_read_u32(battery_np, "ir-cv-offset-microvolt",
 			     &info->ir.cv_upper_limit_offset_uv);
-	of_property_read_u32(battery_np, "fullbatt-advance-level", &info->fullbatt_advance_level);
 
 	of_property_read_u32_index(battery_np, "charge-sdp-current-microamp", 0,
 				   &info->cur.sdp_cur);
