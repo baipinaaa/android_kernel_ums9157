@@ -65,11 +65,14 @@
 #define SPRD_KEYPAD_REPEAT		BIT(2)
 
 /* 寄存器偏移 */
+#define SPRD_KEYPAD_REG_CFG		0x00
+#define SPRD_KEYPAD_REG_CTRL2		0x04
 #define SPRD_KEYPAD_REG_STATUS		0x0c
 #define SPRD_KEYPAD_REG_INT_STS		0x10
 #define SPRD_KEYPAD_REG_CTRL0		0x18
 #define SPRD_KEYPAD_REG_DEBOUNCE	0x1c
 #define SPRD_KEYPAD_REG_PRESCALE	0x20
+#define SPRD_KEYPAD_REG_CTRL3		0x24
 #define SPRD_KEYPAD_REG_CTRL1		0x28
 #define SPRD_KEYPAD_REG_COL		0x2c
 
@@ -110,6 +113,23 @@ static void sprd_keypad_hw_init(struct sprd_keypad *priv)
 	else
 		writel((priv->debounce << 15) / val - 1,
 		       priv->base + SPRD_KEYPAD_REG_DEBOUNCE);
+
+	/*
+	 * 原厂 sprd_keypad_hw_init（Image 0xffffffc010df3f64，65 条指令）尾部还有三笔
+	 * 寄存器写，缺了它们控制器不会开始扫描，只有 gpio-keys 的 POWER/音量键有反应：
+	 *   [base+0x04] = flags & SPRD_KEYPAD_LONG_KEY ? 0xfff : 0xff
+	 *   [base+0x24] = 0x7fff
+	 *   [base+0x00] = (row_used << 16 | col_used << 8) & 0xffff00
+	 *                 | (flags & SPRD_KEYPAD_LONG_KEY ? 7 : 3)
+	 * 这里 flags 取的是 struct sprd_keypad 的 +0x10，LONG_KEY 是 BIT(1)，
+	 * 与原厂 tst w8,#2 / csel 完全对应。
+	 */
+	writel((priv->flags & SPRD_KEYPAD_LONG_KEY) ? 0xfff : 0xff,
+	       priv->base + SPRD_KEYPAD_REG_CTRL2);
+	writel(0x7fff, priv->base + SPRD_KEYPAD_REG_CTRL3);
+	writel((((priv->row_used << 16) | (priv->col_used << 8)) & 0xffff00) |
+	       ((priv->flags & SPRD_KEYPAD_LONG_KEY) ? 7 : 3),
+	       priv->base + SPRD_KEYPAD_REG_CFG);
 }
 
 static irqreturn_t sprd_keypad_handler(int irq, void *dev_id)
