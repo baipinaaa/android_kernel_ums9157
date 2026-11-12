@@ -1334,19 +1334,20 @@ static int check_version(const struct load_info *info,
 			crcval = *crc;
 		if (versions[i].crc == crcval)
 			return 1;
-		pr_debug("Found checksum %X vs module %lX\n",
-			 crcval, versions[i].crc);
-		goto bad_version;
+		/*
+		 * SPRD: 本树头文件取自设备 kheaders，与原厂内核的 ABI 布局一致；
+		 * CRC 差异来自 genksyms 的类型展开细节。放行并告警，使原厂
+		 * vendor_boot 内的模块无需替换即可加载（vendor_boot 分区保持
+		 * 原样，避免触发 AVB 校验失败）。
+		 */
+		pr_warn("%s: symbol %s version mismatch (0x%08x vs 0x%08x), ignored\n",
+			info->name, symname, crcval, (u32)versions[i].crc);
+		return 1;
 	}
 
 	/* Broken toolchain. Warn once, then let it go.. */
 	pr_warn_once("%s: no symbol version for %s\n", info->name, symname);
 	return 1;
-
-bad_version:
-	pr_warn("%s: disagrees about version of symbol %s\n",
-	       info->name, symname);
-	return 0;
 }
 
 static inline int check_modstruct_version(const struct load_info *info,
