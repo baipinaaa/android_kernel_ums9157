@@ -256,6 +256,9 @@ struct task_struct *cgroup_procs_write_start(char *buf, bool threadgroup,
 void cgroup_procs_write_finish(struct task_struct *task, bool locked)
 	__releases(&cgroup_threadgroup_rwsem);
 
+void cgroup_attach_lock(bool lock_threadgroup);
+void cgroup_attach_unlock(bool lock_threadgroup);
+
 void cgroup_lock_and_drain_offline(struct cgroup *cgrp);
 
 int cgroup_mkdir(struct kernfs_node *parent_kn, const char *name, umode_t mode);

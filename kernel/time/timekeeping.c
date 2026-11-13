@@ -1215,6 +1215,70 @@ int get_device_system_crosststamp(int (*get_time_fn)
 }
 EXPORT_SYMBOL_GPL(get_device_system_crosststamp);
 
+static BLOCKING_NOTIFIER_HEAD(sprd_time_sync_chain);
+
+static void sprd_time_sync_call_chain(struct timekeeper *tk, bool was_set)
+{
+	blocking_notifier_call_chain(&sprd_time_sync_chain, was_set, tk);
+}
+
+int sprd_time_sync_register_notifier(struct notifier_block *nb)
+{
+	struct timekeeper *tk = &tk_core.timekeeper;
+	int ret;
+
+	ret = blocking_notifier_chain_register(&sprd_time_sync_chain, nb);
+
+	sprd_time_sync_call_chain(tk, true);
+
+	return ret;
+}
+
+#if IS_ENABLED(CONFIG_SPRD_TIME_SYNC_CP)
+/* define a notifier_block */
+static int (*sprd_time_sync_fn_ptr)(struct notifier_block *, unsigned long, void *);
+struct notifier_block sprd_time_sync_notifier;
+
+static int __nocfi sprd_module_notifier_fn(struct notifier_block *nb,
+					   unsigned long action,
+					   void *data)
+{
+	int ret = 0;
+	struct module *module = data;
+
+	if (action != MODULE_STATE_LIVE)
+		return NOTIFY_DONE;
+
+	/* return immediately if the func has been found */
+	if (sprd_time_sync_fn_ptr)
+		return NOTIFY_DONE;
+
+	/* only module is sprd_cpu_cooling to find symbol */
+	if (!strncmp(module->name, "sprd_time_sync_cp", strlen("sprd_time_sync_cp"))) {
+		sprd_time_sync_fn_ptr = (int (*)(struct notifier_block *, unsigned long, void *))
+			module_kallsyms_lookup_name("sprd_time_sync_fn");
+	}
+
+	if (!sprd_time_sync_fn_ptr)
+		return NOTIFY_DONE;
+
+	sprd_time_sync_notifier.notifier_call = sprd_time_sync_fn_ptr,
+	ret = sprd_time_sync_register_notifier(&sprd_time_sync_notifier);
+	if (ret) {
+		pr_err("sprd time sync notifier register failed.\n");
+		return NOTIFY_DONE;
+	}
+
+	pr_info("sprd time sync cp notifier register done.\n");
+
+	return NOTIFY_OK;
+}
+
+static struct notifier_block sprd_module_notifier = {
+	.notifier_call = sprd_module_notifier_fn,
+};
+#endif
+
 /**
  * do_settimeofday64 - Sets the time of day.
  * @ts:     pointer to the timespec64 variable containing the new time
@@ -1252,6 +1316,8 @@ out:
 
 	write_seqcount_end(&tk_core.seq);
 	raw_spin_unlock_irqrestore(&timekeeper_lock, flags);
+
+	sprd_time_sync_call_chain(tk, true);
 
 	/* signal hrtimers about time change */
 	clock_was_set();
@@ -1571,6 +1637,10 @@ void __init timekeeping_init(void)
 
 	write_seqcount_end(&tk_core.seq);
 	raw_spin_unlock_irqrestore(&timekeeper_lock, flags);
+
+#if IS_ENABLED(CONFIG_SPRD_TIME_SYNC_CP)
+	register_module_notifier(&sprd_module_notifier);
+#endif
 }
 
 /* time in seconds when suspend began for persistent clock */
