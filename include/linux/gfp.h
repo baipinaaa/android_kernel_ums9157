@@ -332,11 +332,6 @@ static inline bool gfpflags_allow_blocking(const gfp_t gfp_flags)
 	return !!(gfp_flags & __GFP_DIRECT_RECLAIM);
 }
 
-static inline bool gfp_compaction_allowed(gfp_t gfp_mask)
-{
-	return IS_ENABLED(CONFIG_COMPACTION) && (gfp_mask & __GFP_IO);
-}
-
 /**
  * gfpflags_normal_context - is gfp_flags a normal sleepable context?
  * @gfp_flags: gfp_flags to test
