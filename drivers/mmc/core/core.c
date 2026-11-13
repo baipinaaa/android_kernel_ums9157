@@ -537,6 +537,26 @@ void mmc_cqe_post_req(struct mmc_host *host, struct mmc_request *mrq)
 }
 EXPORT_SYMBOL(mmc_cqe_post_req);
 
+/**
+ *	mmc_cqe_is_busy - If CQE is busy or not
+ *	@host: MMC host
+ *	@hsq_busy: value to report when the host does not provide its own check
+ *
+ *	The UMS9157 vendor kernel keeps this hook in the Android KABI reserved
+ *	slot of struct mmc_cqe_ops, so out-of-tree hosts (mmc_hsq) can install
+ *	their own implementation without changing the structure layout.  Device
+ *	symbol: ffffffc010f1f0a0 T mmc_cqe_is_busy (global, not exported).
+ */
+bool mmc_cqe_is_busy(struct mmc_host *host, bool hsq_busy)
+{
+	typedef bool (*func)(struct mmc_host *);
+
+	if (host->cqe_ops->android_kabi_reserved1)
+		return ((func)(host->cqe_ops->android_kabi_reserved1))(host);
+	else
+		return hsq_busy;
+}
+
 /* Arbitrary 1 second timeout */
 #define MMC_CQE_RECOVERY_TIMEOUT	1000
 

@@ -732,6 +732,45 @@ UFS_ATTRIBUTE(wb_cur_buf, _CURR_WB_BUFF_SIZE);
  */
 UFS_ATTRIBUTE(max_hpb_single_cmd, _MAX_HPB_SINGLE_CMD);
 
+/*
+ * UMS9157: HPB descriptor (idn 7) field readers.  Offsets/sizes/format strings
+ * were read straight out of the device image:
+ *
+ *   hpb_version_show             0xffffffc010c59794  off 0x40 size 2 "0x%04X\n"
+ *   hpb_control_show             0xffffffc010c59700  off 0x42 size 1 "0x%02X\n"
+ *   hpb_region_size_show         0xffffffc010c58130  off 0x48 size 1 "0x%02X\n"
+ *   hpb_number_lu_show           0xffffffc010c5809c  off 0x49 size 1 "0x%02X\n"
+ *   hpb_subregion_size_show      0xffffffc010c58008  off 0x4a size 1 "0x%02X\n"
+ *   hpb_max_active_regions_show  0xffffffc010c57f6c  off 0x4b size 2 "0x%04X\n"
+ *
+ * The multi-byte fields are printed big endian, matching the REV16+LSR #16 the
+ * device emits for hpb_version/hpb_max_active_regions.
+ */
+#define UFS_HPB_DESC_PARAM(_name, _offset, _size, _fmt)			\
+static ssize_t _name##_show(struct device *dev,				\
+	struct device_attribute *attr, char *buf)			\
+{								\
+	struct ufs_hba *hba = dev_get_drvdata(dev);			\
+	u8 param[2] = { 0, 0 };						\
+	int ret;							\
+									\
+	ret = ufshcd_read_desc_param(hba, QUERY_DESC_IDN_HPB, 0,		\
+				     _offset, param, _size);			\
+	if (ret)							\
+		return ret;						\
+	if (_size == 2)							\
+		return sprintf(buf, _fmt, (param[0] << 8) | param[1]);	\
+	return sprintf(buf, _fmt, param[0]);				\
+}									\
+static DEVICE_ATTR_RO(_name)
+
+UFS_HPB_DESC_PARAM(hpb_version, 0x40, 2, "0x%04X\n");
+UFS_HPB_DESC_PARAM(hpb_control, 0x42, 1, "0x%02X\n");
+UFS_HPB_DESC_PARAM(hpb_region_size, 0x48, 1, "0x%02X\n");
+UFS_HPB_DESC_PARAM(hpb_number_lu, 0x49, 1, "0x%02X\n");
+UFS_HPB_DESC_PARAM(hpb_subregion_size, 0x4a, 1, "0x%02X\n");
+UFS_HPB_DESC_PARAM(hpb_max_active_regions, 0x4b, 2, "0x%04X\n");
+
 
 static struct attribute *ufs_sysfs_attributes[] = {
 	&dev_attr_boot_lun_enabled.attr,
@@ -755,6 +794,12 @@ static struct attribute *ufs_sysfs_attributes[] = {
 	&dev_attr_wb_life_time_est.attr,
 	&dev_attr_wb_cur_buf.attr,
 	&dev_attr_max_hpb_single_cmd.attr,
+	&dev_attr_hpb_version.attr,
+	&dev_attr_hpb_control.attr,
+	&dev_attr_hpb_region_size.attr,
+	&dev_attr_hpb_number_lu.attr,
+	&dev_attr_hpb_subregion_size.attr,
+	&dev_attr_hpb_max_active_regions.attr,
 	NULL,
 };
 

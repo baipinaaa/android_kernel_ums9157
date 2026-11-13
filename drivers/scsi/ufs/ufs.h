@@ -201,6 +201,8 @@ enum desc_idn {
 	QUERY_DESC_IDN_STRING		= 0x5,
 	QUERY_DESC_IDN_RFU_1		= 0x6,
 	QUERY_DESC_IDN_GEOMETRY		= 0x7,
+	/* UMS9157: HPB descriptor shares idn 0x7 with geometry on the wire. */
+	QUERY_DESC_IDN_HPB		= 0x7,
 	QUERY_DESC_IDN_POWER		= 0x8,
 	QUERY_DESC_IDN_HEALTH           = 0x9,
 	QUERY_DESC_IDN_MAX,
