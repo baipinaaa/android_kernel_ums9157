@@ -985,7 +985,7 @@ static int dd_owned_by_driver_show(void *data, struct seq_file *m)
 }
 
 #define DEADLINE_DISPATCH_ATTR(prio)					\
-static void *deadline_dispatch_##prio##_start(struct seq_file *m,	\
+static void *deadline_dispatch##prio##_start(struct seq_file *m,	\
 					     loff_t *pos)		\
 	__acquires(&dd->lock)						\
 {									\
@@ -997,7 +997,7 @@ static void *deadline_dispatch_##prio##_start(struct seq_file *m,	\
 	return seq_list_start(&per_prio->dispatch, *pos);		\
 }									\
 									\
-static void *deadline_dispatch_##prio##_next(struct seq_file *m,		\
+static void *deadline_dispatch##prio##_next(struct seq_file *m,		\
 					    void *v, loff_t *pos)	\
 {									\
 	struct request_queue *q = m->private;				\
@@ -1007,7 +1007,7 @@ static void *deadline_dispatch_##prio##_next(struct seq_file *m,		\
 	return seq_list_next(v, &per_prio->dispatch, pos);		\
 }									\
 									\
-static void deadline_dispatch_##prio##_stop(struct seq_file *m, void *v)	\
+static void deadline_dispatch##prio##_stop(struct seq_file *m, void *v)	\
 	__releases(&dd->lock)						\
 {									\
 	struct request_queue *q = m->private;				\
@@ -1016,10 +1016,10 @@ static void deadline_dispatch_##prio##_stop(struct seq_file *m, void *v)	\
 	spin_unlock(&dd->lock);						\
 }									\
 									\
-static const struct seq_operations deadline_dispatch_##prio##_seq_ops = { \
-	.start	= deadline_dispatch_##prio##_start,			\
-	.next	= deadline_dispatch_##prio##_next,			\
-	.stop	= deadline_dispatch_##prio##_stop,			\
+static const struct seq_operations deadline_dispatch##prio##_seq_ops = { \
+	.start	= deadline_dispatch##prio##_start,			\
+	.next	= deadline_dispatch##prio##_next,			\
+	.stop	= deadline_dispatch##prio##_stop,			\
 	.show	= blk_mq_debugfs_rq_show,				\
 }
 
@@ -1049,9 +1049,9 @@ static const struct blk_mq_debugfs_attr deadline_queue_debugfs_attrs[] = {
 	{"batching", 0400, deadline_batching_show},
 	{"starved", 0400, deadline_starved_show},
 	{"async_depth", 0400, dd_async_depth_show},
-	{"dispatch0", 0400, .seq_ops = &deadline_dispatch_0_seq_ops},
-	{"dispatch1", 0400, .seq_ops = &deadline_dispatch_1_seq_ops},
-	{"dispatch2", 0400, .seq_ops = &deadline_dispatch_2_seq_ops},
+	{"dispatch0", 0400, .seq_ops = &deadline_dispatch0_seq_ops},
+	{"dispatch1", 0400, .seq_ops = &deadline_dispatch1_seq_ops},
+	{"dispatch2", 0400, .seq_ops = &deadline_dispatch2_seq_ops},
 	{"owned_by_driver", 0400, dd_owned_by_driver_show},
 	{"queued", 0400, dd_queued_show},
 	{},
