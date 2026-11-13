@@ -160,17 +160,8 @@ jobs:
             # --partition-size 决定 pad 到 64 MiB。
             python3 scripts/pack_boot.py --kernel arch/arm64/boot/Image --out boot.img
             python3 scripts/pack_boot.py --verify boot.img
-            python3 - <<'EOF'
-import struct
-with open('boot.img', 'rb') as f:
-    f.seek(0, 2)
-    size = f.tell()
-    f.seek(size - 64)
-    tail = f.read()
-assert tail[:4] == b'AVBf', 'AvbFooter missing'
-_, _, orig, voff, vsz = struct.unpack('>IIQQQ', tail[4:36])
-print('AVB footer: image_end=%d vbmeta@%d size=%d total=%d' % (orig, voff, vsz, size))
-EOF
+            # 校验末尾确实有 AvbFooter（GitHub 不认 heredoc，这里用单行 -c）
+            python3 -c "import struct; t=open('boot.img','rb').read()[-64:]; assert t[:4]==b'AVBf', 'AvbFooter missing'; o,v,s=struct.unpack('>QQQ', t[12:36]); print('AVB footer: image_end=%d vbmeta@%d size=%d' % (o,v,s))"
             ls -lh boot.img
           else
             echo "没有 Image，跳过打包"
