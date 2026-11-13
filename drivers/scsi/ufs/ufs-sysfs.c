@@ -654,6 +654,12 @@ UFS_FLAG(disable_fw_update, _PERMANENTLY_DISABLE_FW_UPDATE);
 UFS_FLAG(wb_enable, _WB_EN);
 UFS_FLAG(wb_flush_en, _WB_BUFF_FLUSH_EN);
 UFS_FLAG(wb_flush_during_h8, _WB_BUFF_FLUSH_DURING_HIBERN8);
+/*
+ * UMS9157: HPB enable flag.  Device hpb_enable_show() (0xffffffc010c55330)
+ * calls ufshcd_query_flag(hba, UPIU_QUERY_OPCODE_READ_FLAG, 0x12, 0, &flag)
+ * and prints "%s\n" with "true"/"false", which is exactly what UFS_FLAG emits.
+ */
+UFS_FLAG(hpb_enable, _HPB_EN);
 
 static struct attribute *ufs_sysfs_device_flags[] = {
 	&dev_attr_device_init.attr,
@@ -667,6 +673,7 @@ static struct attribute *ufs_sysfs_device_flags[] = {
 	&dev_attr_wb_enable.attr,
 	&dev_attr_wb_flush_en.attr,
 	&dev_attr_wb_flush_during_h8.attr,
+	&dev_attr_hpb_enable.attr,
 	NULL,
 };
 
@@ -717,6 +724,13 @@ UFS_ATTRIBUTE(wb_flush_status, _WB_FLUSH_STATUS);
 UFS_ATTRIBUTE(wb_avail_buf, _AVAIL_WB_BUFF_SIZE);
 UFS_ATTRIBUTE(wb_life_time_est, _WB_BUFF_LIFE_TIME_EST);
 UFS_ATTRIBUTE(wb_cur_buf, _CURR_WB_BUFF_SIZE);
+/*
+ * UMS9157: max_hpb_single_cmd.  Device max_hpb_single_cmd_show()
+ * (0xffffffc010c546dc) calls ufshcd_query_attr(hba,
+ * UPIU_QUERY_OPCODE_READ_ATTR, 0x01, 0, 0, &value) and prints "0x%08X\n",
+ * which is exactly what UFS_ATTRIBUTE emits.
+ */
+UFS_ATTRIBUTE(max_hpb_single_cmd, _MAX_HPB_SINGLE_CMD);
 
 
 static struct attribute *ufs_sysfs_attributes[] = {
@@ -740,6 +754,7 @@ static struct attribute *ufs_sysfs_attributes[] = {
 	&dev_attr_wb_avail_buf.attr,
 	&dev_attr_wb_life_time_est.attr,
 	&dev_attr_wb_cur_buf.attr,
+	&dev_attr_max_hpb_single_cmd.attr,
 	NULL,
 };
 
@@ -791,6 +806,17 @@ UFS_UNIT_DESC_PARAM(provisioning_type, _PROVISIONING_TYPE, 1);
 UFS_UNIT_DESC_PARAM(physical_memory_resourse_count, _PHY_MEM_RSRC_CNT, 8);
 UFS_UNIT_DESC_PARAM(context_capabilities, _CTX_CAPABILITIES, 2);
 UFS_UNIT_DESC_PARAM(large_unit_granularity, _LARGE_UNIT_SIZE_M1, 1);
+/*
+ * UMS9157 device carries the HPB fields of the unit descriptor too:
+ * drivers/scsi/ufs/ufs.h has UNIT_DESC_PARAM_HPB_* at 0x23/0x25/0x27 and the
+ * device image exports hpb_lu_max_active_regions_show (0xffffffc010c5b4d0),
+ * hpb_pinned_region_start_offset_show (0xffffffc010c5b3fc) and
+ * hpb_number_pinned_regions_show (0xffffffc010c5b328), all reading 2 bytes via
+ * ufshcd_read_desc_param() and printing "0x%04X\n".
+ */
+UFS_UNIT_DESC_PARAM(hpb_lu_max_active_regions, _HPB_LU_MAX_ACTIVE_RGNS, 2);
+UFS_UNIT_DESC_PARAM(hpb_pinned_region_start_offset, _HPB_PIN_RGN_START_OFF, 2);
+UFS_UNIT_DESC_PARAM(hpb_number_pinned_regions, _HPB_NUM_PIN_RGNS, 2);
 UFS_UNIT_DESC_PARAM(wb_buf_alloc_units, _WB_BUF_ALLOC_UNITS, 4);
 
 
@@ -808,6 +834,9 @@ static struct attribute *ufs_sysfs_unit_descriptor[] = {
 	&dev_attr_physical_memory_resourse_count.attr,
 	&dev_attr_context_capabilities.attr,
 	&dev_attr_large_unit_granularity.attr,
+	&dev_attr_hpb_lu_max_active_regions.attr,
+	&dev_attr_hpb_pinned_region_start_offset.attr,
+	&dev_attr_hpb_number_pinned_regions.attr,
 	&dev_attr_wb_buf_alloc_units.attr,
 	NULL,
 };
