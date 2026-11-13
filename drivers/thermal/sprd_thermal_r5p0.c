@@ -219,20 +219,6 @@ static int sprd_thm_sen_efuse_cal(struct device_node *np,
 	return 0;
 }
 
-static int sprd_rawdata_to_temp_v1(struct sprd_thermal_sensor *sen)
-{
-	if (sen->rawdata < SPRD_RAW_DATA_LOW)
-		sen->rawdata = SPRD_RAW_DATA_LOW;
-	else if (sen->rawdata > SPRD_RAW_DATA_HIGH)
-		sen->rawdata = SPRD_RAW_DATA_HIGH;
-
-	/*
-	 * According to thermal datasheet adc value conversion
-	 * temperature formula T_final = k_cal * x - b_cal.
-	 */
-	return sen->cal_slope * sen->rawdata - sen->cal_offset;
-}
-
 static int sprd_temp_to_rawdata_v1(int temp, struct sprd_thermal_sensor *sen)
 {
 	u32 rawval;
@@ -256,14 +242,15 @@ static int sprd_thm_temp_read(void *devdata, int *temp)
 	struct sprd_thermal_sensor *sen = devdata;
 	int sensor_temp;
 
-	if (sen->ready) {
-		sen->rawdata = readl(sen->base + sen->temp) & SPRD_THM_RAW_READ_MSK;
-		sensor_temp = sprd_rawdata_to_temp_v1(sen);
-		sen->lasttemp = sensor_temp;
-		*temp = sensor_temp;
-	} else {
-		*temp = sen->lasttemp;
-	}
+	/*
+	 * The device has no ready-gate and no raw clamp here: its
+	 * sprd_thm_read_temp (0xffffffc00a35xxx, 72 instructions) is a
+	 * straight line: read raw, dmb(oshld), k_cal * raw - b_cal.
+	 */
+	sen->rawdata = readl(sen->base + sen->temp) & SPRD_THM_RAW_READ_MSK;
+	sensor_temp = sen->cal_slope * sen->rawdata - sen->cal_offset;
+	sen->lasttemp = sensor_temp;
+	*temp = sensor_temp;
 
 	return 0;
 }
