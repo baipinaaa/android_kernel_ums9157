@@ -21,3 +21,30 @@ struct ip6t_hl_info {
 
 
 #endif
+
+/* ---- merged from ip6t_HL.h (the upper-case sibling that cannot coexist
+ * with ip6t_hl.h on a case-insensitive filesystem) ---- */
+#ifndef _IP6T_HL_TARGET_H_MERGED
+#define _IP6T_HL_TARGET_H_MERGED
+
+/* Hop Limit modification module for ip6tables
+ * Maciej Soltysiak <solt@dns.toxicfilms.tv>
+ * Based on HW's TTL module */
+
+
+#include <linux/types.h>
+
+enum {
+	IP6T_HL_SET = 0,
+	IP6T_HL_INC,
+	IP6T_HL_DEC
+};
+
+#define IP6T_HL_MAXMODE	IP6T_HL_DEC
+
+struct ip6t_HL_info {
+	__u8	mode;
+	__u8	hop_limit;
+};
+
+#endif /* _IP6T_HL_TARGET_H_MERGED */

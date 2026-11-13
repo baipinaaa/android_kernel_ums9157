@@ -33,3 +33,12 @@ struct xt_connmark_mtinfo1 {
 };
 
 #endif 
+
+/* ---- merged from xt_CONNMARK.h (the upper-case sibling that cannot coexist
+ * with xt_connmark.h on a case-insensitive filesystem) ---- */
+#ifndef _XT_CONNMARK_H_target_MERGED
+#define _XT_CONNMARK_H_target_MERGED
+
+#include <linux/netfilter/xt_connmark.h>
+
+#endif /* _XT_CONNMARK_H_target_MERGED */

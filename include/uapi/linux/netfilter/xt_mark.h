@@ -14,3 +14,12 @@ struct xt_mark_mtinfo1 {
 };
 
 #endif 
+
+/* ---- merged from xt_MARK.h (the upper-case sibling that cannot coexist
+ * with xt_mark.h on a case-insensitive filesystem) ---- */
+#ifndef _XT_MARK_H_target_MERGED
+#define _XT_MARK_H_target_MERGED
+
+#include <linux/netfilter/xt_mark.h>
+
+#endif /* _XT_MARK_H_target_MERGED */

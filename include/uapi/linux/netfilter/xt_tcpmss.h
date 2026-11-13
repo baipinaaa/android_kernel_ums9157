@@ -10,3 +10,18 @@ struct xt_tcpmss_match_info {
 };
 
 #endif 
+
+/* ---- merged from xt_TCPMSS.h (the upper-case sibling that cannot coexist
+ * with xt_tcpmss.h on a case-insensitive filesystem) ---- */
+#ifndef _XT_TCPMSS_H_MERGED
+#define _XT_TCPMSS_H_MERGED
+
+#include <linux/types.h>
+
+struct xt_tcpmss_info {
+	__u16 mss;
+};
+
+#define XT_TCPMSS_CLAMP_PMTU 0xffff
+
+#endif /* _XT_TCPMSS_H_MERGED */
