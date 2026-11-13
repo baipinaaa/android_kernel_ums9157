@@ -122,6 +122,15 @@ struct acc_dev {
 	/* worker for registering and unregistering hid devices */
 	struct work_struct hid_work;
 
+	/*
+	 * The device additionally notifies the userspace HAL that the host
+	 * asked for the accessory protocol string or pushed a string down;
+	 * acc_getprotocol_work()/acc_sendstring_work() emit the matching
+	 * ACCESSORY= uevents (0xffffffc010db76b8 / 0xffffffc010db7720).
+	 */
+	struct work_struct getprotocol_work;
+	struct work_struct sendstring_work;
+
 	/* list of active HID devices */
 	struct list_head	hid_list;
 
@@ -1145,6 +1154,20 @@ static void acc_start_work(struct work_struct *data)
 	kobject_uevent_env(&acc_device.this_device->kobj, KOBJ_CHANGE, envp);
 }
 
+static void acc_getprotocol_work(struct work_struct *data)
+{
+	char *envp[2] = { "ACCESSORY=GETPROTOCOL", NULL };
+
+	kobject_uevent_env(&acc_device.this_device->kobj, KOBJ_CHANGE, envp);
+}
+
+static void acc_sendstring_work(struct work_struct *data)
+{
+	char *envp[2] = { "ACCESSORY=SENDSTRING", NULL };
+
+	kobject_uevent_env(&acc_device.this_device->kobj, KOBJ_CHANGE, envp);
+}
+
 static int acc_hid_init(struct acc_hid_dev *hdev)
 {
 	struct hid_device *hid;
@@ -1313,6 +1336,8 @@ static int acc_setup(void)
 	INIT_LIST_HEAD(&dev->dead_hid_list);
 	INIT_DELAYED_WORK(&dev->start_work, acc_start_work);
 	INIT_WORK(&dev->hid_work, acc_hid_work);
+	INIT_WORK(&dev->getprotocol_work, acc_getprotocol_work);
+	INIT_WORK(&dev->sendstring_work, acc_sendstring_work);
 
 	dev->ref = ref;
 	if (cmpxchg_relaxed(&ref->acc_dev, NULL, dev)) {

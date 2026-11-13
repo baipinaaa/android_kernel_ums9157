@@ -6911,12 +6911,6 @@ int binder_state_show(struct seq_file *m, void *unused)
 	return 0;
 }
 
-int binder_state_hashed_show(struct seq_file *m, void *unused)
-{
-	print_binder_state(m, true);
-	return 0;
-}
-
 int binder_stats_show(struct seq_file *m, void *unused)
 {
 	struct binder_proc *proc;
@@ -6936,12 +6930,6 @@ int binder_stats_show(struct seq_file *m, void *unused)
 int binder_transactions_show(struct seq_file *m, void *unused)
 {
 	print_binder_transactions(m, false);
-	return 0;
-}
-
-int binder_transactions_hashed_show(struct seq_file *m, void *unused)
-{
-	print_binder_transactions(m, true);
 	return 0;
 }
 
@@ -7075,11 +7063,6 @@ static int __init binder_init(void)
 				    binder_debugfs_dir_entry_root,
 				    NULL,
 				    &binder_state_fops);
-		debugfs_create_file("state_hashed",
-				    0444,
-				    binder_debugfs_dir_entry_root,
-				    NULL,
-				    &binder_state_hashed_fops);
 		debugfs_create_file("stats",
 				    0444,
 				    binder_debugfs_dir_entry_root,
@@ -7090,11 +7073,6 @@ static int __init binder_init(void)
 				    binder_debugfs_dir_entry_root,
 				    NULL,
 				    &binder_transactions_fops);
-		debugfs_create_file("transactions_hashed",
-				    0444,
-				    binder_debugfs_dir_entry_root,
-				    NULL,
-				    &binder_transactions_hashed_fops);
 		debugfs_create_file("transaction_log",
 				    0444,
 				    binder_debugfs_dir_entry_root,

@@ -3340,6 +3340,15 @@ CONFIG_DRM_KMS_CMA_HELPER=y
 # CONFIG_DRM_KOMEDA is not set
 # end of ARM devices
 
+#
+# Mali Midgard (drivers/gpu/arm/midgard/mali): the device .config has no
+# MALI_* option at all.  It is only being pulled in because that Kconfig
+# declares "default m"; the GPU driver on this product comes from the
+# vendor module mali_kbase.ko.  Turn it off so we build exactly what the
+# device builds.
+#
+# CONFIG_MALI_MIDGARD is not set
+
 # CONFIG_DRM_RADEON is not set
 # CONFIG_DRM_AMDGPU is not set
 

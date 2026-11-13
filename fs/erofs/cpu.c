@@ -13,7 +13,7 @@
 #include <linux/cpuhotplug.h>
 #include <linux/kthread.h>
 #include <linux/sched.h>
-#include <linux/sched/types.h>
+#include <uapi/linux/sched/types.h>
 
 static DEFINE_SPINLOCK(z_erofs_pcpu_worker_lock);
 static struct kthread_worker *z_erofs_pcpu_workers[NR_CPUS];
