@@ -63,9 +63,15 @@ int z_erofs_init_cpuhp(void)
 {
 	int err;
 
-	err = cpuhp_setup_state_nocalls(CPUHP_AP_ONLINE_DYN,
-					"fs/erofs:online",
-					erofs_cpu_online, erofs_cpu_offline);
+	/* 必须用 cpuhp_setup_state（invoke=false）：设备在
+	 * z_erofs_init_zip_subsystem 里调用 __cpuhp_setup_state 时 w2=wzr，
+	 * 即会遍历已在线 CPU 逐个调 startup。之前误用 _nocalls（invoke=true），
+	 * 开机时 8 个 CPU 全部已在线，于是 erofs_cpu_online() 一次都没被调用，
+	 * 运行时刻 erofs_worker/N 线程数为 0（实测），per-CPU 快路径永远用不上。
+	 */
+	err = cpuhp_setup_state(CPUHP_AP_ONLINE_DYN,
+				"fs/erofs:online",
+				erofs_cpu_online, erofs_cpu_offline);
 	if (err < 0)
 		return err;
 	erofs_cpuhp_state = err;
@@ -75,7 +81,7 @@ int z_erofs_init_cpuhp(void)
 void z_erofs_exit_cpuhp(void)
 {
 	if (erofs_cpuhp_state)
-		cpuhp_remove_state_nocalls(erofs_cpuhp_state);
+		cpuhp_remove_state(erofs_cpuhp_state);
 }
 
 bool z_erofs_queue_pcpu_work(struct kthread_work *work)
