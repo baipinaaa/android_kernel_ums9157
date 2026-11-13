@@ -519,7 +519,12 @@ static void dd_depth_updated(struct blk_mq_hw_ctx *hctx)
 
 	dd->async_depth = max(1UL, 3 * q->nr_requests / 4);
 
-	sbitmap_queue_min_shallow_depth(tags->bitmap_tags, dd->async_depth);
+	/*
+	 * 5.4 keeps struct sbitmap_queue embedded in struct blk_mq_tags
+	 * (5.10 onwards it is a pointer), and its block_rq_insert tracepoint
+	 * still carries the request_queue.
+	 */
+	sbitmap_queue_min_shallow_depth(&tags->bitmap_tags, dd->async_depth);
 }
 
 /* Called by blk_mq_init_hctx() and blk_mq_init_sched(). */
@@ -682,7 +687,7 @@ static void dd_insert_request(struct blk_mq_hw_ctx *hctx, struct request *rq,
 	if (blk_mq_sched_try_insert_merge(q, rq))
 		return;
 
-	trace_block_rq_insert(rq);
+	trace_block_rq_insert(q, rq);
 
 	per_prio = &dd->per_prio[prio];
 	if (at_head) {
