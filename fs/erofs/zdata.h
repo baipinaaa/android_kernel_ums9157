@@ -9,6 +9,7 @@
 
 #include "internal.h"
 #include "zpvec.h"
+#include <linux/kthread.h>
 
 #define Z_EROFS_NR_INLINE_PAGEVECS      3
 
@@ -91,6 +92,7 @@ struct z_erofs_unzip_io {
 	union {
 		wait_queue_head_t wait;
 		struct work_struct work;
+		struct kthread_work kthread_work;
 	} u;
 };
 

@@ -36,6 +36,9 @@ static struct kmem_cache *pcluster_cachep __read_mostly;
 
 void z_erofs_exit_zip_subsystem(void)
 {
+#ifdef CONFIG_EROFS_FS_PCPU_KTHREAD
+	z_erofs_exit_cpuhp();
+#endif
 	destroy_workqueue(z_erofs_workqueue);
 	kmem_cache_destroy(pcluster_cachep);
 }
@@ -51,7 +54,13 @@ static inline int z_erofs_init_workqueue(void)
 	 */
 	z_erofs_workqueue = alloc_workqueue("erofs_unzipd", flags,
 					    onlinecpus + onlinecpus / 4);
-	return z_erofs_workqueue ? 0 : -ENOMEM;
+	if (!z_erofs_workqueue)
+		return -ENOMEM;
+#ifdef CONFIG_EROFS_FS_PCPU_KTHREAD
+	return z_erofs_init_cpuhp();
+#else
+	return 0;
+#endif
 }
 
 static void z_erofs_pcluster_init_once(void *ptr)
@@ -697,24 +706,32 @@ err_out:
 	goto out;
 }
 
+static void z_erofs_vle_unzip_wq(struct work_struct *work);
+
 static void z_erofs_vle_unzip_kickoff(void *ptr, int bios)
 {
 	tagptr1_t t = tagptr_init(tagptr1_t, ptr);
 	struct z_erofs_unzip_io *io = tagptr_unfold_ptr(t);
 	bool background = tagptr_unfold_tags(t);
 
-	if (!background) {
-		unsigned long flags;
+	if (atomic_add_return(bios, &io->pending_bios))
+		return;
 
-		spin_lock_irqsave(&io->u.wait.lock, flags);
-		if (!atomic_add_return(bios, &io->pending_bios))
-			wake_up_locked(&io->u.wait);
-		spin_unlock_irqrestore(&io->u.wait.lock, flags);
+#ifdef CONFIG_EROFS_FS_PCPU_KTHREAD
+	if (background && z_erofs_queue_pcpu_work(&io->u.kthread_work))
+		return;
+#endif
+
+	if (!background) {
+		wake_up(&io->u.wait);
 		return;
 	}
 
-	if (!atomic_add_return(bios, &io->pending_bios))
-		queue_work(z_erofs_workqueue, &io->u.work);
+#ifdef CONFIG_EROFS_FS_PCPU_KTHREAD
+	/* this CPU has no worker of its own: use the shared workqueue */
+	INIT_WORK(&io->u.work, z_erofs_vle_unzip_wq);
+#endif
+	queue_work(z_erofs_workqueue, &io->u.work);
 }
 
 static inline void z_erofs_vle_read_endio(struct bio *bio)
@@ -987,6 +1004,23 @@ static void z_erofs_vle_unzip_wq(struct work_struct *work)
 	kvfree(iosb);
 }
 
+#ifdef CONFIG_EROFS_FS_PCPU_KTHREAD
+static void
+z_erofs_decompressqueue_kthread_work(struct kthread_work *work)
+{
+	struct z_erofs_unzip_io_sb *iosb =
+		container_of(work, struct z_erofs_unzip_io_sb,
+			    io.u.kthread_work);
+	LIST_HEAD(pagepool);
+
+	DBG_BUGON(iosb->io.head == Z_EROFS_PCLUSTER_TAIL_CLOSED);
+	z_erofs_vle_unzip_all(iosb->sb, &iosb->io, &pagepool);
+
+	put_pages_list(&pagepool);
+	kvfree(iosb);
+}
+#endif
+
 static struct page *pickup_page_for_submission(struct z_erofs_pcluster *pcl,
 					       unsigned int nr,
 					       struct list_head *pagepool,
@@ -1132,7 +1166,12 @@ static struct z_erofs_unzip_io *jobqueue_init(struct super_block *sb,
 	/* initialize fields in the allocated descriptor */
 	io = &iosb->io;
 	iosb->sb = sb;
+#ifdef CONFIG_EROFS_FS_PCPU_KTHREAD
+	kthread_init_work(&io->u.kthread_work,
+			  z_erofs_decompressqueue_kthread_work);
+#else
 	INIT_WORK(&io->u.work, z_erofs_vle_unzip_wq);
+#endif
 out:
 	io->head = Z_EROFS_PCLUSTER_TAIL_CLOSED;
 	return io;

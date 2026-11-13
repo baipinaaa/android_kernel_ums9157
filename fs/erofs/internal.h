@@ -412,6 +412,13 @@ int __init erofs_init_shrinker(void);
 void erofs_exit_shrinker(void);
 int __init z_erofs_init_zip_subsystem(void);
 void z_erofs_exit_zip_subsystem(void);
+
+#ifdef CONFIG_EROFS_FS_PCPU_KTHREAD
+struct kthread_work;
+int z_erofs_init_cpuhp(void);
+void z_erofs_exit_cpuhp(void);
+bool z_erofs_queue_pcpu_work(struct kthread_work *work);
+#endif
 int erofs_try_to_free_all_cached_pages(struct erofs_sb_info *sbi,
 				       struct erofs_workgroup *egrp);
 int erofs_try_to_free_cached_page(struct address_space *mapping,
