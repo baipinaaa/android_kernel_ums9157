@@ -152,12 +152,25 @@ jobs:
             echo "没有 dwc3-sprd-core.ko，跳过"
           fi
 
-      - name: 打包 boot.img（可直接刷）
+      - name: 打包 boot.img（带 AVB，可直接刷）
         if: always()
         run: |
           if [ -f arch/arm64/boot/Image ]; then
-            python3 scripts/pack_boot.py --kernel arch/arm64/boot/Image --out boot.img --pad-to 67108864
+            # 默认已写 AVB0 + AvbFooter（设备 bootloader 必需），
+            # --partition-size 决定 pad 到 64 MiB。
+            python3 scripts/pack_boot.py --kernel arch/arm64/boot/Image --out boot.img
             python3 scripts/pack_boot.py --verify boot.img
+            python3 - <<'EOF'
+import struct
+with open('boot.img', 'rb') as f:
+    f.seek(0, 2)
+    size = f.tell()
+    f.seek(size - 64)
+    tail = f.read()
+assert tail[:4] == b'AVBf', 'AvbFooter missing'
+_, _, orig, voff, vsz = struct.unpack('>IIQQQ', tail[4:36])
+print('AVB footer: image_end=%d vbmeta@%d size=%d total=%d' % (orig, voff, vsz, size))
+EOF
             ls -lh boot.img
           else
             echo "没有 Image，跳过打包"
