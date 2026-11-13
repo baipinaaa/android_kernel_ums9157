@@ -746,7 +746,7 @@ UFS_ATTRIBUTE(max_hpb_single_cmd, _MAX_HPB_SINGLE_CMD);
  * The multi-byte fields are printed big endian, matching the REV16+LSR #16 the
  * device emits for hpb_version/hpb_max_active_regions.
  */
-#define UFS_HPB_DESC_PARAM(_name, _offset, _size, _fmt)			\
+#define UFS_HPB_DESC_PARAM(_name, _idn, _offset, _size, _fmt)		\
 static ssize_t _name##_show(struct device *dev,				\
 	struct device_attribute *attr, char *buf)			\
 {								\
@@ -754,7 +754,7 @@ static ssize_t _name##_show(struct device *dev,				\
 	u8 param[2] = { 0, 0 };						\
 	int ret;							\
 									\
-	ret = ufshcd_read_desc_param(hba, QUERY_DESC_IDN_HPB, 0,		\
+	ret = ufshcd_read_desc_param(hba, _idn, 0,			\
 				     _offset, param, _size);			\
 	if (ret)							\
 		return ret;						\
@@ -764,12 +764,20 @@ static ssize_t _name##_show(struct device *dev,				\
 }									\
 static DEVICE_ATTR_RO(_name)
 
-UFS_HPB_DESC_PARAM(hpb_version, 0x40, 2, "0x%04X\n");
-UFS_HPB_DESC_PARAM(hpb_control, 0x42, 1, "0x%02X\n");
-UFS_HPB_DESC_PARAM(hpb_region_size, 0x48, 1, "0x%02X\n");
-UFS_HPB_DESC_PARAM(hpb_number_lu, 0x49, 1, "0x%02X\n");
-UFS_HPB_DESC_PARAM(hpb_subregion_size, 0x4a, 1, "0x%02X\n");
-UFS_HPB_DESC_PARAM(hpb_max_active_regions, 0x4b, 2, "0x%04X\n");
+/*
+ * hpb_version and hpb_control live in the *device* descriptor (idn 0) at
+ * 0x40/0x42; the other four live in the HPB descriptor (idn 7) at 0x48..0x4b.
+ * Traced from the device: ufshcd_read_desc_param(hba, w1=0|7, w2=0, w3=off,
+ * x4=buf, w5=size) at 0xffffffc010c59794 / 0xffffffc010c59700 /
+ * 0xffffffc010c58130 / 0xffffffc010c5809c / 0xffffffc010c58008 /
+ * 0xffffffc010c57f6c.
+ */
+UFS_HPB_DESC_PARAM(hpb_version, QUERY_DESC_IDN_DEVICE, 0x40, 2, "0x%04X\n");
+UFS_HPB_DESC_PARAM(hpb_control, QUERY_DESC_IDN_DEVICE, 0x42, 1, "0x%02X\n");
+UFS_HPB_DESC_PARAM(hpb_region_size, QUERY_DESC_IDN_HPB, 0x48, 1, "0x%02X\n");
+UFS_HPB_DESC_PARAM(hpb_number_lu, QUERY_DESC_IDN_HPB, 0x49, 1, "0x%02X\n");
+UFS_HPB_DESC_PARAM(hpb_subregion_size, QUERY_DESC_IDN_HPB, 0x4a, 1, "0x%02X\n");
+UFS_HPB_DESC_PARAM(hpb_max_active_regions, QUERY_DESC_IDN_HPB, 0x4b, 2, "0x%04X\n");
 
 
 static struct attribute *ufs_sysfs_attributes[] = {
